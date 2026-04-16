@@ -13,8 +13,12 @@ import {TEEBridge} from "../src/TEEBridge.sol";
 ///   OWNER              — address to own both proxies (Safe or EOA)
 ///   KMS_ROOT           — first trusted KMS root signer address to seed
 ///                        DstackVerifier with (e.g. Phala Base KMS root)
-///   ALLOWED_CODE_ID    — first compose hash to seed TEEBridge with
-///                        (e.g. Xyn's teesql-postgres compose hash)
+///
+/// Optional env vars:
+///   ALLOWED_CODE_ID    — first compose hash to seed TEEBridge with.
+///                        If unset or 0x0, TEEBridge is initialized with
+///                        an empty allowedCode set; admin adds codes
+///                        post-deploy via Safe TX.
 ///
 /// Both proxies can have more roots / codes / verifiers added post-deploy
 /// via the admin functions; only the initial seed is set here.
@@ -22,7 +26,7 @@ contract Deploy is Script {
     function run() external {
         address owner = vm.envAddress("OWNER");
         address kmsRoot = vm.envAddress("KMS_ROOT");
-        bytes32 allowedCodeId = vm.envBytes32("ALLOWED_CODE_ID");
+        bytes32 allowedCodeId = vm.envOr("ALLOWED_CODE_ID", bytes32(0));
 
         vm.startBroadcast();
 
@@ -47,8 +51,13 @@ contract Deploy is Script {
         address[] memory verifiers = new address[](1);
         verifiers[0] = address(verifierProxy);
 
-        bytes32[] memory allowedCodes = new bytes32[](1);
-        allowedCodes[0] = allowedCodeId;
+        bytes32[] memory allowedCodes;
+        if (allowedCodeId != bytes32(0)) {
+            allowedCodes = new bytes32[](1);
+            allowedCodes[0] = allowedCodeId;
+        } else {
+            allowedCodes = new bytes32[](0);
+        }
 
         bytes memory bridgeInit = abi.encodeCall(
             TEEBridge.initialize,
@@ -62,6 +71,11 @@ contract Deploy is Script {
         console.log("---");
         console.log("Owner:                       ", owner);
         console.log("Seed KMS root:               ", kmsRoot);
-        console.logBytes32(allowedCodeId);
+        if (allowedCodeId != bytes32(0)) {
+            console.log("Seed allowed code:");
+            console.logBytes32(allowedCodeId);
+        } else {
+            console.log("Seed allowed code:           (none; add via Safe TX post-deploy)");
+        }
     }
 }
