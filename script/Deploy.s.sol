@@ -2,44 +2,66 @@
 pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
-import {TeeGroupAuth} from "../src/TeeGroupAuth.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import {DstackVerifier} from "../src/DstackVerifier.sol";
+import {TEEBridge} from "../src/TEEBridge.sol";
+
+/// @notice Deploys TEEBridge + DstackVerifier behind ERC1967 proxies.
+///
+/// Required env vars:
+///   OWNER              — address to own both proxies (Safe or EOA)
+///   KMS_ROOT           — first trusted KMS root signer address to seed
+///                        DstackVerifier with (e.g. Phala Base KMS root)
+///   ALLOWED_CODE_ID    — first compose hash to seed TEEBridge with
+///                        (e.g. Xyn's teesql-postgres compose hash)
+///
+/// Both proxies can have more roots / codes / verifiers added post-deploy
+/// via the admin functions; only the initial seed is set here.
 contract Deploy is Script {
     function run() external {
-        // Configure these for your deployment
-        address owner = msg.sender;
-
-        // Example KMS roots — replace with real addresses
-        address[] memory trustedKmsRoots = new address[](1);
-        trustedKmsRoots[0] = vm.envAddress("KMS_ROOT");
-
-        // Example allowed code IDs — replace with real values
-        bytes32[] memory allowedCodes = new bytes32[](1);
-        allowedCodes[0] = vm.envBytes32("ALLOWED_CODE_ID");
+        address owner = vm.envAddress("OWNER");
+        address kmsRoot = vm.envAddress("KMS_ROOT");
+        bytes32 allowedCodeId = vm.envBytes32("ALLOWED_CODE_ID");
 
         vm.startBroadcast();
 
-        // Deploy implementation
-        TeeGroupAuth implementation = new TeeGroupAuth();
-        console.log("Implementation:", address(implementation));
+        // --- DstackVerifier ---
+        DstackVerifier verifierImpl = new DstackVerifier();
+        console.log("DstackVerifier implementation:", address(verifierImpl));
 
-        // Encode initialize call
-        bytes memory initData = abi.encodeCall(
-            TeeGroupAuth.initialize,
-            (owner, trustedKmsRoots, allowedCodes)
+        address[] memory kmsRoots = new address[](1);
+        kmsRoots[0] = kmsRoot;
+
+        bytes memory verifierInit = abi.encodeCall(
+            DstackVerifier.initialize,
+            (owner, kmsRoots)
         );
+        ERC1967Proxy verifierProxy = new ERC1967Proxy(address(verifierImpl), verifierInit);
+        console.log("DstackVerifier proxy:        ", address(verifierProxy));
 
-        // Deploy proxy
-        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        console.log("Proxy:", address(proxy));
+        // --- TEEBridge ---
+        TEEBridge bridgeImpl = new TEEBridge();
+        console.log("TEEBridge implementation:    ", address(bridgeImpl));
 
-        // Verify initialization
-        TeeGroupAuth tga = TeeGroupAuth(address(proxy));
-        console.log("Owner:", tga.owner());
-        console.log("Secret version:", tga.secretVersion());
-        console.log("KMS root trusted:", tga.trustedKmsRoots(trustedKmsRoots[0]));
+        address[] memory verifiers = new address[](1);
+        verifiers[0] = address(verifierProxy);
+
+        bytes32[] memory allowedCodes = new bytes32[](1);
+        allowedCodes[0] = allowedCodeId;
+
+        bytes memory bridgeInit = abi.encodeCall(
+            TEEBridge.initialize,
+            (owner, verifiers, allowedCodes)
+        );
+        ERC1967Proxy bridgeProxy = new ERC1967Proxy(address(bridgeImpl), bridgeInit);
+        console.log("TEEBridge proxy:             ", address(bridgeProxy));
 
         vm.stopBroadcast();
+
+        console.log("---");
+        console.log("Owner:                       ", owner);
+        console.log("Seed KMS root:               ", kmsRoot);
+        console.logBytes32(allowedCodeId);
     }
 }
