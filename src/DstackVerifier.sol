@@ -98,6 +98,10 @@ contract DstackVerifier is IVerifier, Initializable, UUPSUpgradeable, OwnableUpg
 
         // Step 2: KMS signs "dstack-kms-issued:" + bytes20(appId) + appPubkey
         {
+            // Validate that appId can be safely cast to bytes20 (address)
+            // Check that upper 12 bytes are zero to prevent data loss
+            if (bytes32(_appId) >> 160 != 0) return false;
+
             bytes32 kmsMsgHash = keccak256(
                 abi.encodePacked("dstack-kms-issued:", bytes20(_appId), p.appCompressedPubkey)
             );
