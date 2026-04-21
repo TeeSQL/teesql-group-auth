@@ -44,19 +44,15 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     mapping(bytes32 => mapping(address => AuthorizedSigner)) public authorizedSigners;
 
     struct AuthorizedSigner {
-        uint8 permissions;     // Bitfield: 1=read, 2=write (3=read+write)
-        bool active;           // Whether the authorization is currently active
-        uint256 authorizedAt;  // Timestamp when authorization was granted
+        uint8 permissions; // Bitfield: 1=read, 2=write (3=read+write)
+        bool active; // Whether the authorization is currently active
+        uint256 authorizedAt; // Timestamp when authorization was granted
     }
 
     // --- Events ---
 
     event MemberRegistered(
-        bytes32 indexed memberId,
-        bytes32 indexed codeId,
-        address indexed verifier,
-        bytes pubkey,
-        bytes userData
+        bytes32 indexed memberId, bytes32 indexed codeId, address indexed verifier, bytes pubkey, bytes userData
     );
     event OnboardingPosted(bytes32 indexed toMember, bytes32 indexed fromMember);
     event AllowedCodeAdded(bytes32 indexed codeId);
@@ -84,11 +80,10 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @param _owner Owner address — intended to be our Safe (+ timelock).
     /// @param _verifiers Initial set of allowed verifier contracts.
     /// @param _allowedCodes Initial set of allowed code ids (compose hashes).
-    function initialize(
-        address _owner,
-        address[] calldata _verifiers,
-        bytes32[] calldata _allowedCodes
-    ) external initializer {
+    function initialize(address _owner, address[] calldata _verifiers, bytes32[] calldata _allowedCodes)
+        external
+        initializer
+    {
         if (_owner == address(0)) revert ZeroAddress();
         __Ownable_init(_owner);
 
@@ -134,18 +129,13 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     ///         verifier. memberId = keccak256(pubkey).
     function register(address verifier, bytes calldata proof) external returns (bytes32) {
         if (!allowedVerifiers[verifier]) revert VerifierNotAllowed();
-        (bytes32 codeId, bytes memory pubkey, bytes memory userData) =
-            IVerifier(verifier).verifyAndCache(proof);
+        (bytes32 codeId, bytes memory pubkey, bytes memory userData) = IVerifier(verifier).verifyAndCache(proof);
         if (!allowedCode[codeId]) revert CodeNotAllowed();
 
         bytes32 memberId = keccak256(pubkey);
         if (_members[memberId].registeredAt != 0) revert AlreadyRegistered();
         _members[memberId] = Member({
-            codeId: codeId,
-            verifier: verifier,
-            pubkey: pubkey,
-            userData: userData,
-            registeredAt: block.timestamp
+            codeId: codeId, verifier: verifier, pubkey: pubkey, userData: userData, registeredAt: block.timestamp
         });
         emit MemberRegistered(memberId, codeId, verifier, pubkey, userData);
         return memberId;
@@ -169,21 +159,14 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @param clusterId The cluster identifier (typically cluster name hash)
     /// @param signerAddress The Ethereum address derived from the signer's public key
     /// @param permissions Permission bitfield: 1=read, 2=write, 3=read+write
-    function addAuthorizedSigner(
-        bytes32 clusterId,
-        address signerAddress,
-        uint8 permissions
-    ) external onlyOwner {
+    function addAuthorizedSigner(bytes32 clusterId, address signerAddress, uint8 permissions) external onlyOwner {
         if (signerAddress == address(0)) revert ZeroAddress();
         if (permissions == 0 || permissions > 3) {
             revert("Invalid permissions: must be 1 (read), 2 (write), or 3 (read+write)");
         }
 
-        authorizedSigners[clusterId][signerAddress] = AuthorizedSigner({
-            permissions: permissions,
-            active: true,
-            authorizedAt: block.timestamp
-        });
+        authorizedSigners[clusterId][signerAddress] =
+            AuthorizedSigner({permissions: permissions, active: true, authorizedAt: block.timestamp});
 
         emit SignerAuthorized(clusterId, signerAddress, permissions);
     }
@@ -191,10 +174,7 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @notice Revoke database access for a signer
     /// @param clusterId The cluster identifier
     /// @param signerAddress The signer's Ethereum address
-    function revokeAuthorizedSigner(
-        bytes32 clusterId,
-        address signerAddress
-    ) external onlyOwner {
+    function revokeAuthorizedSigner(bytes32 clusterId, address signerAddress) external onlyOwner {
         authorizedSigners[clusterId][signerAddress].active = false;
         emit SignerRevoked(clusterId, signerAddress);
     }
@@ -204,11 +184,11 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @param signerAddress The signer's Ethereum address
     /// @param requiredPermission Permission level: 1=read, 2=write, 3=read+write
     /// @return Whether the signer has the required permissions
-    function isAuthorizedSigner(
-        bytes32 clusterId,
-        address signerAddress,
-        uint8 requiredPermission
-    ) external view returns (bool) {
+    function isAuthorizedSigner(bytes32 clusterId, address signerAddress, uint8 requiredPermission)
+        external
+        view
+        returns (bool)
+    {
         AuthorizedSigner storage signer = authorizedSigners[clusterId][signerAddress];
 
         if (!signer.active) return false;
@@ -226,10 +206,11 @@ contract TEEBridge is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     /// @return permissions The permission bitfield
     /// @return active Whether the authorization is active
     /// @return authorizedAt When the authorization was granted
-    function getAuthorization(
-        bytes32 clusterId,
-        address signerAddress
-    ) external view returns (uint8 permissions, bool active, uint256 authorizedAt) {
+    function getAuthorization(bytes32 clusterId, address signerAddress)
+        external
+        view
+        returns (uint8 permissions, bool active, uint256 authorizedAt)
+    {
         AuthorizedSigner storage signer = authorizedSigners[clusterId][signerAddress];
         return (signer.permissions, signer.active, signer.authorizedAt);
     }

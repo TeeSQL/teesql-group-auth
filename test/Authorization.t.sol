@@ -37,7 +37,7 @@ contract AuthorizationTest is Test {
             (
                 owner,
                 new address[](0), // no verifiers
-                new bytes32[](0)  // no allowed codes
+                new bytes32[](0) // no allowed codes
             )
         );
 
@@ -151,8 +151,8 @@ contract AuthorizationTest is Test {
         bridge.addAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ_WRITE);
 
         // Read+write should satisfy all permission checks
-        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ));      // 3 & 1 = 1
-        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE));     // 3 & 2 = 2
+        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ)); // 3 & 1 = 1
+        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE)); // 3 & 2 = 2
         assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ_WRITE)); // 3 & 3 = 3
     }
 
@@ -160,8 +160,8 @@ contract AuthorizationTest is Test {
         vm.prank(owner);
         bridge.addAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ);
 
-        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ));      // 1 & 1 = 1 ✓
-        assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE));     // 1 & 2 = 0 ✗
+        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ)); // 1 & 1 = 1 ✓
+        assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE)); // 1 & 2 = 0 ✗
         assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ_WRITE)); // 1 & 3 = 1 ≠ 3 ✗
     }
 
@@ -169,8 +169,8 @@ contract AuthorizationTest is Test {
         vm.prank(owner);
         bridge.addAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE);
 
-        assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ));      // 2 & 1 = 0 ✗
-        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE));     // 2 & 2 = 2 ✓
+        assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ)); // 2 & 1 = 0 ✗
+        assertTrue(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_WRITE)); // 2 & 2 = 2 ✓
         assertFalse(bridge.isAuthorizedSigner(CLUSTER_XYN, alice, PERMISSION_READ_WRITE)); // 2 & 3 = 2 ≠ 3 ✗
     }
 

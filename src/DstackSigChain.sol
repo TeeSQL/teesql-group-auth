@@ -20,12 +20,12 @@ library DstackSigChain {
     struct Proof {
         bytes32 codeId;
         bytes32 messageHash;
-        bytes   messageSignature;
-        bytes   appSignature;
-        bytes   kmsSignature;
-        bytes   derivedCompressedPubkey; // 33-byte compressed SEC1
-        bytes   appCompressedPubkey;     // 33-byte compressed SEC1
-        string  purpose;
+        bytes messageSignature;
+        bytes appSignature;
+        bytes kmsSignature;
+        bytes derivedCompressedPubkey; // 33-byte compressed SEC1
+        bytes appCompressedPubkey; // 33-byte compressed SEC1
+        string purpose;
     }
 
     error InvalidSigChain();
@@ -53,9 +53,8 @@ library DstackSigChain {
 
         // Step 2: KMS root signs "dstack-kms-issued:" || bytes20(appId) || appPubkey
         {
-            bytes32 kmsMsgHash = keccak256(
-                abi.encodePacked("dstack-kms-issued:", bytes20(p.codeId), p.appCompressedPubkey)
-            );
+            bytes32 kmsMsgHash =
+                keccak256(abi.encodePacked("dstack-kms-issued:", bytes20(p.codeId), p.appCompressedPubkey));
             address kmsSigner = _recoverSigner(kmsMsgHash, p.kmsSignature);
             if (!registry.allowedKmsRoots(kmsSigner)) revert InvalidSigChain();
         }
@@ -136,7 +135,7 @@ library DstackSigChain {
         bytes memory alphabet = "0123456789abcdef";
         bytes memory str = new bytes(data.length * 2);
         for (uint256 i = 0; i < data.length; i++) {
-            str[i * 2]     = alphabet[uint8(data[i] >> 4)];
+            str[i * 2] = alphabet[uint8(data[i] >> 4)];
             str[i * 2 + 1] = alphabet[uint8(data[i] & 0x0f)];
         }
         return string(str);

@@ -37,10 +37,7 @@ contract Deploy is Script {
         address[] memory kmsRoots = new address[](1);
         kmsRoots[0] = kmsRoot;
 
-        bytes memory verifierInit = abi.encodeCall(
-            DstackVerifier.initialize,
-            (owner, kmsRoots)
-        );
+        bytes memory verifierInit = abi.encodeCall(DstackVerifier.initialize, (owner, kmsRoots));
         ERC1967Proxy verifierProxy = new ERC1967Proxy(address(verifierImpl), verifierInit);
         console.log("DstackVerifier proxy:        ", address(verifierProxy));
 
@@ -59,10 +56,7 @@ contract Deploy is Script {
             allowedCodes = new bytes32[](0);
         }
 
-        bytes memory bridgeInit = abi.encodeCall(
-            TEEBridge.initialize,
-            (owner, verifiers, allowedCodes)
-        );
+        bytes memory bridgeInit = abi.encodeCall(TEEBridge.initialize, (owner, verifiers, allowedCodes));
         ERC1967Proxy bridgeProxy = new ERC1967Proxy(address(bridgeImpl), bridgeInit);
         console.log("TEEBridge proxy:             ", address(bridgeProxy));
 

@@ -54,7 +54,7 @@ contract TEEBridgeTest is Test {
     address owner = address(0xA11CE);
     bytes32 constant ALLOWED_CODE = keccak256("teesql-xyn-compose");
     bytes PUBKEY_ALICE = hex"0278a9cbd96b9b8b8ba2e0d4c21fef6c9b1ae45d70f42b1a5f8a9c9b9e3f3b3b11";
-    bytes PUBKEY_BOB   = hex"0378a9cbd96b9b8b8ba2e0d4c21fef6c9b1ae45d70f42b1a5f8a9c9b9e3f3b3b22";
+    bytes PUBKEY_BOB = hex"0378a9cbd96b9b8b8ba2e0d4c21fef6c9b1ae45d70f42b1a5f8a9c9b9e3f3b3b22";
     bytes32 MEMBER_ALICE;
     bytes32 MEMBER_BOB;
 
