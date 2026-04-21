@@ -24,7 +24,8 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
         address derivedAddr,
         address passthrough,
         string memory role,
-        bytes memory endpoint
+        bytes memory endpoint,
+        bytes memory publicEndpoint
     ) external {
         _members[memberId] = Member({
             instanceId: instanceId,
@@ -33,8 +34,8 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
             passthrough: passthrough,
             role: role,
             endpoint: endpoint,
-            registeredAt: block.timestamp,
-            lastHeartbeat: block.timestamp
+            publicEndpoint: publicEndpoint,
+            registeredAt: block.timestamp
         });
         instanceToMember[instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
@@ -75,7 +76,7 @@ contract TeeSqlClusterAppTest is Test {
     // Member A
     uint256 aPk;
     address aAddr;
-    bytes aPubkey33; // placeholder 33-byte pubkey (not used by CallAuth logic)
+    bytes aPubkey33;
     bytes32 aMemberId;
     address aInstanceId;
 
@@ -86,11 +87,17 @@ contract TeeSqlClusterAppTest is Test {
     bytes32 bMemberId;
     address bInstanceId;
 
-    // Two synthetic passthroughs
+    // Member C (third node for witness-quorum tests)
+    uint256 cPk;
+    address cAddr;
+    bytes cPubkey33;
+    bytes32 cMemberId;
+    address cInstanceId;
+
     address passthroughA;
     address passthroughB;
+    address passthroughC;
 
-    // Compose + device baseline
     bytes32 constant COMPOSE_HASH = bytes32(uint256(0xC0DE));
     bytes32 constant DEVICE_ID = bytes32(uint256(0xDEEF));
 
@@ -101,39 +108,47 @@ contract TeeSqlClusterAppTest is Test {
         address[] memory roots = new address[](1);
         roots[0] = kmsRootA;
         bytes memory initData =
-            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(mockKms), "monitor", 60, roots));
+            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(mockKms), "monitor", roots));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         app = TeeSqlClusterAppHarness(address(proxy));
 
-        // Seed two passthroughs without going through createMember (not testing that here)
         passthroughA = makeAddr("passthroughA");
         passthroughB = makeAddr("passthroughB");
+        passthroughC = makeAddr("passthroughC");
         app.__testSetPassthrough(passthroughA, true);
         app.__testSetPassthrough(passthroughB, true);
+        app.__testSetPassthrough(passthroughC, true);
 
-        // Seed default compose + device
         vm.startPrank(OWNER);
         app.addComposeHash(COMPOSE_HASH);
         app.addDevice(DEVICE_ID);
         vm.stopPrank();
 
-        // Derive signing keys + seed members
         (aAddr, aPk) = makeAddrAndKey("memberA-derived");
         (bAddr, bPk) = makeAddrAndKey("memberB-derived");
+        (cAddr, cPk) = makeAddrAndKey("memberC-derived");
         aPubkey33 = _fakePubkey(aAddr);
         bPubkey33 = _fakePubkey(bAddr);
+        cPubkey33 = _fakePubkey(cAddr);
         aMemberId = keccak256(aPubkey33);
         bMemberId = keccak256(bPubkey33);
+        cMemberId = keccak256(cPubkey33);
         aInstanceId = makeAddr("instA");
         bInstanceId = makeAddr("instB");
+        cInstanceId = makeAddr("instC");
 
-        app.__testSetMember(aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA");
-        app.__testSetMember(bMemberId, bInstanceId, bPubkey33, bAddr, passthroughB, "secondary", "endpointB");
+        app.__testSetMember(
+            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA", "https://a.example"
+        );
+        app.__testSetMember(
+            bMemberId, bInstanceId, bPubkey33, bAddr, passthroughB, "secondary", "endpointB", "https://b.example"
+        );
+        app.__testSetMember(
+            cMemberId, cInstanceId, cPubkey33, cAddr, passthroughC, "secondary", "endpointC", "https://c.example"
+        );
     }
 
     function _fakePubkey(address a) internal pure returns (bytes memory) {
-        // 33-byte marker derived from address. Irrelevant for CallAuth tests since
-        // _verifyCall compares against derivedAddr, which the harness sets directly.
         return bytes.concat(bytes1(0x02), bytes20(a), bytes12(0));
     }
 
@@ -144,7 +159,6 @@ contract TeeSqlClusterAppTest is Test {
         assertTrue(app.hasRole(app.PAUSER_ROLE(), PAUSER));
         assertTrue(app.hasRole(app.DEFAULT_ADMIN_ROLE(), OWNER));
         assertEq(app.kms(), address(mockKms));
-        assertEq(app.leaseTTL(), 60);
         assertEq(app.clusterId(), "monitor");
         assertTrue(app.allowedKmsRoots(kmsRootA));
     }
@@ -155,23 +169,23 @@ contract TeeSqlClusterAppTest is Test {
         vm.expectRevert(TeeSqlClusterApp.ZeroAddress.selector);
         new ERC1967Proxy(
             address(impl),
-            abi.encodeCall(TeeSqlClusterApp.initialize, (address(0), PAUSER, address(mockKms), "x", 60, roots))
+            abi.encodeCall(TeeSqlClusterApp.initialize, (address(0), PAUSER, address(mockKms), "x", roots))
         );
         vm.expectRevert(TeeSqlClusterApp.ZeroAddress.selector);
         new ERC1967Proxy(
             address(impl),
-            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, address(0), address(mockKms), "x", 60, roots))
+            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, address(0), address(mockKms), "x", roots))
         );
         vm.expectRevert(TeeSqlClusterApp.ZeroAddress.selector);
         new ERC1967Proxy(
-            address(impl), abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(0), "x", 60, roots))
+            address(impl), abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(0), "x", roots))
         );
     }
 
     function test_supportsInterface() public view {
         assertTrue(app.supportsInterface(type(IAppAuth).interfaceId));
         assertTrue(app.supportsInterface(type(IAppAuthBasicManagement).interfaceId));
-        assertTrue(app.supportsInterface(0x01ffc9a7)); // IERC165
+        assertTrue(app.supportsInterface(0x01ffc9a7));
         assertFalse(app.supportsInterface(0xdeadbeef));
     }
 
@@ -216,7 +230,6 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_passthroughForwardsIsAppAllowed() public {
         address passthrough = app.createMember(bytes32("p"));
-
         IAppAuth.AppBootInfo memory b = _bootInfo(passthrough, COMPOSE_HASH, DEVICE_ID);
         (bool ok, string memory reason) = TeeSqlClusterMember(passthrough).isAppAllowed(b);
         assertTrue(ok, reason);
@@ -291,169 +304,292 @@ contract TeeSqlClusterAppTest is Test {
         assertEq(reason, "cluster paused");
     }
 
-    // --- CallAuth / claimLeader / heartbeat ---
+    // --- claimLeader (first claim + self-reclaim) ---
 
-    function test_claimLeaderSucceedsWithValidSig() public {
+    function test_firstClaimNoWitnessRequired() public {
         bytes memory endpoint = hex"0102030405";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
 
-        app.claimLeader(auth, endpoint);
+        app.claimLeader(auth, endpoint, witnesses);
 
-        (bytes32 leaderId, uint256 epoch, uint256 expiresAt) = app.leaderLease();
+        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
         assertEq(leaderId, aMemberId);
         assertEq(epoch, 1);
-        assertEq(expiresAt, block.timestamp + 60);
         assertEq(app.memberNonce(aMemberId), 1);
+    }
+
+    function test_selfReclaimNoWitnessRequired() public {
+        bytes memory ep1 = hex"aa";
+        bytes memory ep2 = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
+
+        TeeSqlClusterApp.CallAuth memory auth1 =
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(ep1, witnesses));
+        app.claimLeader(auth1, ep1, witnesses);
+
+        // Same member reclaims — no witnesses required; epoch bumps.
+        TeeSqlClusterApp.CallAuth memory auth2 =
+            _makeCallAuth(aMemberId, aPk, 1, app.claimLeader.selector, abi.encode(ep2, witnesses));
+        app.claimLeader(auth2, ep2, witnesses);
+
+        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
+        assertEq(leaderId, aMemberId);
+        assertEq(epoch, 2);
     }
 
     function test_claimLeaderRejectsReplay() public {
         bytes memory endpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(auth, endpoint);
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
+        app.claimLeader(auth, endpoint, witnesses);
 
         vm.expectRevert(TeeSqlClusterApp.BadNonce.selector);
-        app.claimLeader(auth, endpoint);
+        app.claimLeader(auth, endpoint, witnesses);
     }
 
     function test_claimLeaderRejectsWrongSigner() public {
         bytes memory endpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         // Sign with B's key but claim to be A
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, bPk, 0, app.claimLeader.selector, abi.encode(endpoint));
+            _makeCallAuth(aMemberId, bPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
         vm.expectRevert(TeeSqlClusterApp.BadSig.selector);
-        app.claimLeader(auth, endpoint);
+        app.claimLeader(auth, endpoint, witnesses);
     }
 
-    function test_claimLeaderBlockedByActiveLease() public {
-        bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory aAuth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(aAuth, endpoint);
+    // --- claimLeader witness-based takeover ---
 
-        // B tries to claim while A's lease is still active
+    function test_takeoverRequiresWitness() public {
+        // A claims first
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+
+        // B tries to take over with empty witnesses — rejected.
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory bAuth =
-            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        vm.expectRevert(TeeSqlClusterApp.LeaseActive.selector);
-        app.claimLeader(bAuth, endpoint);
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.NoWitness.selector);
+        app.claimLeader(bAuth, ep, witnesses);
     }
 
-    function test_claimLeaderAllowsTakeoverAfterExpiry() public {
-        bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory aAuth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(aAuth, endpoint);
+    function test_takeoverSucceedsWithWitnessFromOtherMember() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
 
-        // Fast-forward past lease expiry
-        vm.warp(block.timestamp + 61);
+        // B claims, witnessed by C.
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](1);
+        witnesses[0] = _makeWitness(leaderId0, epoch0, cMemberId, cPk);
 
         TeeSqlClusterApp.CallAuth memory bAuth =
-            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(bAuth, endpoint);
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        app.claimLeader(bAuth, ep, witnesses);
 
-        (bytes32 leaderId, uint256 epoch,) = app.leaderLease();
+        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
         assertEq(leaderId, bMemberId);
-        assertEq(epoch, 2);
+        assertEq(epoch, epoch0 + 1);
     }
 
-    function test_heartbeatExtendsLease() public {
-        bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory aAuth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(aAuth, endpoint);
-        uint256 t0 = block.timestamp;
+    function test_selfWitnessRejected() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
 
-        vm.warp(t0 + 30);
+        // B claims but provides a witness from itself (claimant == voucher).
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](1);
+        witnesses[0] = _makeWitness(leaderId0, epoch0, bMemberId, bPk);
 
-        TeeSqlClusterApp.CallAuth memory hbAuth = _makeCallAuth(aMemberId, aPk, 1, app.heartbeat.selector, "");
-        app.heartbeat(hbAuth);
-
-        (,, uint256 expiresAt) = app.leaderLease();
-        assertEq(expiresAt, t0 + 30 + 60);
+        TeeSqlClusterApp.CallAuth memory bAuth =
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.SelfWitness.selector);
+        app.claimLeader(bAuth, ep, witnesses);
     }
 
-    function test_heartbeatFromNonLeaderDoesNotExtendLease() public {
-        bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory aAuth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(aAuth, endpoint);
-        (,, uint256 expiresBefore) = app.leaderLease();
+    function test_duplicateWitnessRejected() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
 
-        vm.warp(block.timestamp + 10);
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](2);
+        witnesses[0] = _makeWitness(leaderId0, epoch0, cMemberId, cPk);
+        witnesses[1] = _makeWitness(leaderId0, epoch0, cMemberId, cPk);
 
-        // B heartbeats — valid call, but B isn't leader, so lease unchanged
-        TeeSqlClusterApp.CallAuth memory hbAuth = _makeCallAuth(bMemberId, bPk, 0, app.heartbeat.selector, "");
-        app.heartbeat(hbAuth);
-
-        (,, uint256 expiresAfter) = app.leaderLease();
-        assertEq(expiresAfter, expiresBefore);
+        TeeSqlClusterApp.CallAuth memory bAuth =
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.DuplicateWitness.selector);
+        app.claimLeader(bAuth, ep, witnesses);
     }
+
+    function test_witnessFromNonMemberRejected() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+
+        // Sign a witness with a random key + a bogus voucherMemberId.
+        bytes32 bogusId = keccak256("not-a-member");
+        (, uint256 randPk) = makeAddrAndKey("rand");
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](1);
+        witnesses[0] = _makeWitness(leaderId0, epoch0, bogusId, randPk);
+
+        TeeSqlClusterApp.CallAuth memory bAuth =
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.WitnessNotMember.selector);
+        app.claimLeader(bAuth, ep, witnesses);
+    }
+
+    function test_witnessWithBadSigRejected() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+
+        // Voucher is C (a valid member) but signed by the wrong key (aPk).
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](1);
+        witnesses[0] = _makeWitness(leaderId0, epoch0, cMemberId, aPk);
+
+        TeeSqlClusterApp.CallAuth memory bAuth =
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.BadWitnessSig.selector);
+        app.claimLeader(bAuth, ep, witnesses);
+    }
+
+    function test_crossEpochWitnessReplayRejected() public {
+        // Epoch 1: A claims.
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        (bytes32 leaderId1, uint256 epoch1) = app.leaderLease();
+
+        // C signs a valid witness for epoch 1.
+        TeeSqlClusterApp.Witness memory epoch1Witness = _makeWitness(leaderId1, epoch1, cMemberId, cPk);
+
+        // B takes over at epoch 2 using C's witness.
+        {
+            bytes memory ep = hex"bb";
+            TeeSqlClusterApp.Witness[] memory ws = new TeeSqlClusterApp.Witness[](1);
+            ws[0] = epoch1Witness;
+            TeeSqlClusterApp.CallAuth memory bAuth =
+                _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, ws));
+            app.claimLeader(bAuth, ep, ws);
+        }
+        (, uint256 epoch2) = app.leaderLease();
+        assertEq(epoch2, epoch1 + 1);
+
+        // Now A tries to take over at epoch 2 replaying C's original epoch-1 witness.
+        // Should fail: witness message binds to (B, epoch2), not (A, epoch1).
+        {
+            bytes memory ep = hex"cc";
+            TeeSqlClusterApp.Witness[] memory ws = new TeeSqlClusterApp.Witness[](1);
+            ws[0] = epoch1Witness;
+            TeeSqlClusterApp.CallAuth memory aAuth =
+                _makeCallAuth(aMemberId, aPk, 1, app.claimLeader.selector, abi.encode(ep, ws));
+            vm.expectRevert(TeeSqlClusterApp.BadWitnessSig.selector);
+            app.claimLeader(aAuth, ep, ws);
+        }
+    }
+
+    // --- currentLeader ---
 
     function test_currentLeaderRevertsBeforeClaim() public {
         vm.expectRevert(TeeSqlClusterApp.NotLeaderClaimant.selector);
         app.currentLeader();
     }
 
-    function test_currentLeaderRevertsAfterExpiry() public {
-        bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory aAuth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
-        app.claimLeader(aAuth, endpoint);
-        vm.warp(block.timestamp + 61);
-        vm.expectRevert(TeeSqlClusterApp.NotLeaderClaimant.selector);
-        app.currentLeader();
+    function test_currentLeaderReturnsLatestAfterClaim() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        TeeSqlClusterApp.Member memory m = app.currentLeader();
+        assertEq(m.instanceId, aInstanceId);
+        assertEq(m.endpoint, hex"aa");
+    }
+
+    // --- updateEndpoint / updatePublicEndpoint ---
+
+    function test_updateEndpointStoresAndEmits() public {
+        bytes memory ep = hex"cafebabe";
+        TeeSqlClusterApp.CallAuth memory auth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updateEndpoint.selector, abi.encode(ep));
+
+        vm.expectEmit(true, false, false, true, address(app));
+        emit TeeSqlClusterApp.EndpointUpdated(aMemberId, ep);
+        app.updateEndpoint(auth, ep);
+
+        TeeSqlClusterApp.Member memory m = app.getMember(aMemberId);
+        assertEq(m.endpoint, ep);
+    }
+
+    function test_updatePublicEndpointStoresAndEmits() public {
+        bytes memory url = bytes("https://new.example");
+        TeeSqlClusterApp.CallAuth memory auth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updatePublicEndpoint.selector, abi.encode(url));
+
+        vm.expectEmit(true, false, false, true, address(app));
+        emit TeeSqlClusterApp.PublicEndpointUpdated(aMemberId, url);
+        app.updatePublicEndpoint(auth, url);
+
+        TeeSqlClusterApp.Member memory m = app.getMember(aMemberId);
+        assertEq(m.publicEndpoint, url);
+    }
+
+    function test_updateEndpointFromNonMemberReverts() public {
+        bytes32 bogusId = keccak256("bogus");
+        bytes memory ep = hex"aa";
+        TeeSqlClusterApp.CallAuth memory auth =
+            _makeCallAuth(bogusId, aPk, 0, app.updateEndpoint.selector, abi.encode(ep));
+        vm.expectRevert(TeeSqlClusterApp.NotMember.selector);
+        app.updateEndpoint(auth, ep);
     }
 
     // --- CallAuth scope pinning ---
 
     function test_callSigBoundToContractAddress() public {
-        // Deploy a second cluster app and try to reuse sig
         TeeSqlClusterAppHarness impl2 = new TeeSqlClusterAppHarness();
         address[] memory roots = new address[](1);
         roots[0] = kmsRootA;
         bytes memory initData =
-            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(mockKms), "other", 60, roots));
+            abi.encodeCall(TeeSqlClusterApp.initialize, (OWNER, PAUSER, address(mockKms), "other", roots));
         ERC1967Proxy proxy2 = new ERC1967Proxy(address(impl2), initData);
         TeeSqlClusterAppHarness app2 = TeeSqlClusterAppHarness(address(proxy2));
-        // Seed same member in app2
         app2.__testSetPassthrough(passthroughA, true);
-        app2.__testSetMember(aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA");
+        app2.__testSetMember(
+            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA", "https://a.example"
+        );
 
-        // Sig produced for app1
         bytes memory endpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
 
-        // Submit to app2 — should fail BadSig (address(this) differs)
         vm.expectRevert(TeeSqlClusterApp.BadSig.selector);
-        app2.claimLeader(auth, endpoint);
+        app2.claimLeader(auth, endpoint, witnesses);
     }
 
     function test_callSigBoundToSelector() public {
-        // Sign a heartbeat sig, try to use it as claimLeader
         bytes memory endpoint = hex"aa";
-        TeeSqlClusterApp.CallAuth memory hbSig = _makeCallAuth(aMemberId, aPk, 0, app.heartbeat.selector, "");
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
+        // Sign for updateEndpoint, submit as claimLeader.
+        TeeSqlClusterApp.CallAuth memory sig =
+            _makeCallAuth(aMemberId, aPk, 0, app.updateEndpoint.selector, abi.encode(endpoint));
         vm.expectRevert(TeeSqlClusterApp.BadSig.selector);
-        app.claimLeader(hbSig, endpoint);
+        app.claimLeader(sig, endpoint, witnesses);
     }
 
     function test_callSigBoundToArgs() public {
-        // Sig produced for endpoint "aa", submit with endpoint "bb"
         bytes memory signedEndpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(signedEndpoint));
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(signedEndpoint, witnesses));
         vm.expectRevert(TeeSqlClusterApp.BadSig.selector);
-        app.claimLeader(auth, hex"bb");
+        app.claimLeader(auth, hex"bb", witnesses);
     }
 
     function test_callFromNonMemberReverts() public {
         bytes32 bogusId = keccak256("bogus");
         bytes memory endpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(bogusId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
+            _makeCallAuth(bogusId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
         vm.expectRevert(TeeSqlClusterApp.NotMember.selector);
-        app.claimLeader(auth, endpoint);
+        app.claimLeader(auth, endpoint, witnesses);
     }
 
     // --- Onboarding ---
@@ -479,7 +615,7 @@ contract TeeSqlClusterAppTest is Test {
         app.onboard(auth, missing, payload);
     }
 
-    // --- Pause semantics ---
+    // --- Pause ---
 
     function test_pauserCanPauseAdminCanUnpause() public {
         bytes32 adminRole = app.DEFAULT_ADMIN_ROLE();
@@ -487,7 +623,6 @@ contract TeeSqlClusterAppTest is Test {
         app.pause();
         assertTrue(app.paused());
 
-        // PAUSER cannot unpause
         bytes memory expected =
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, PAUSER, adminRole);
         vm.prank(PAUSER);
@@ -512,14 +647,16 @@ contract TeeSqlClusterAppTest is Test {
         app.pause();
 
         bytes memory endpoint = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
         TeeSqlClusterApp.CallAuth memory auth =
-            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint));
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(endpoint, witnesses));
         vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
-        app.claimLeader(auth, endpoint);
+        app.claimLeader(auth, endpoint, witnesses);
 
-        TeeSqlClusterApp.CallAuth memory hbAuth = _makeCallAuth(aMemberId, aPk, 0, app.heartbeat.selector, "");
+        TeeSqlClusterApp.CallAuth memory upAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updateEndpoint.selector, abi.encode(endpoint));
         vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
-        app.heartbeat(hbAuth);
+        app.updateEndpoint(upAuth, endpoint);
     }
 
     // --- Admin ---
@@ -601,5 +738,23 @@ contract TeeSqlClusterAppTest is Test {
         bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", h));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, ethHash);
         return TeeSqlClusterApp.CallAuth({memberId: memberId, nonce: nonce, sig: abi.encodePacked(r, s, v)});
+    }
+
+    function _makeWitness(bytes32 deposedMemberId, uint256 deposedEpoch, bytes32 voucherMemberId, uint256 voucherPk)
+        internal
+        view
+        returns (TeeSqlClusterApp.Witness memory)
+    {
+        bytes32 wMsg = app.witnessMessage(deposedMemberId, deposedEpoch, voucherMemberId);
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", wMsg));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(voucherPk, ethHash);
+        return TeeSqlClusterApp.Witness({voucherMemberId: voucherMemberId, sig: abi.encodePacked(r, s, v)});
+    }
+
+    function _claimLeaderAs(bytes32 memberId, uint256 pk, uint256 nonce, bytes memory endpoint) internal {
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
+        TeeSqlClusterApp.CallAuth memory auth =
+            _makeCallAuth(memberId, pk, nonce, app.claimLeader.selector, abi.encode(endpoint, witnesses));
+        app.claimLeader(auth, endpoint, witnesses);
     }
 }

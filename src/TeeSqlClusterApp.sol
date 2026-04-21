@@ -51,9 +51,9 @@ contract TeeSqlClusterApp is
         address derivedAddr;
         address passthrough;
         string role;
-        bytes endpoint;
+        bytes endpoint;        // AES-GCM ct of tailnet IP; peer-to-peer only.
+        bytes publicEndpoint;  // UTF-8 public URL (Phala gateway or operator host).
         uint256 registeredAt;
-        uint256 lastHeartbeat;
     }
     mapping(bytes32 => Member) internal _members;
     mapping(address => bytes32) public instanceToMember;
@@ -76,13 +76,20 @@ contract TeeSqlClusterApp is
     mapping(address => AuthorizedSigner) public authorizedSigners;
 
     // --- Leader lease ---
+    // No TTL: leadership holds until a higher-epoch claimLeader() replaces it.
+    // Liveness is proven off-chain via TEE peer-to-peer challenges; the chain
+    // records only cluster shape changes.
     struct Lease {
         bytes32 memberId;
         uint256 epoch;
-        uint256 expiresAt;
     }
     Lease public leaderLease;
-    uint256 public leaseTTL;
+
+    // --- Witness (for claimLeader) ---
+    struct Witness {
+        bytes32 voucherMemberId;
+        bytes sig;
+    }
 
     // --- Peering ---
     mapping(address => bool) public allowedPeerApps;
@@ -98,8 +105,9 @@ contract TeeSqlClusterApp is
         bytes32 indexed memberId, address indexed instanceId, address indexed passthrough, string role
     );
     event InstanceBindingVerified(bytes32 indexed memberId, address indexed instanceId);
-    event Heartbeat(bytes32 indexed memberId, uint256 timestamp);
     event LeaderClaimed(bytes32 indexed memberId, uint256 indexed epoch, bytes endpoint);
+    event EndpointUpdated(bytes32 indexed memberId, bytes endpoint);
+    event PublicEndpointUpdated(bytes32 indexed memberId, bytes publicEndpoint);
     event OnboardingPosted(bytes32 indexed toMember, bytes32 indexed fromMember);
     event KmsRootAdded(address indexed root);
     event KmsRootRemoved(address indexed root);
@@ -107,7 +115,6 @@ contract TeeSqlClusterApp is
     event SignerRevoked(address indexed signer);
     event PeerAppSet(address indexed peerApp, bool allowed);
     event KmsSet(address indexed kms);
-    event LeaseTTLSet(uint256 ttl);
     event AllowAnyDeviceSet(bool value);
 
     // --- Errors ---
@@ -116,7 +123,11 @@ contract TeeSqlClusterApp is
     error InstanceBindingInvalid();
     error NotMember();
     error NotLeaderClaimant();
-    error LeaseActive();
+    error NoWitness();
+    error SelfWitness();
+    error WitnessNotMember();
+    error DuplicateWitness();
+    error BadWitnessSig();
     error BadNonce();
     error BadSig();
     error ZeroAddress();
@@ -132,7 +143,6 @@ contract TeeSqlClusterApp is
         address _pauser,
         address _kms,
         string calldata _clusterId,
-        uint256 _leaseTTL,
         address[] calldata _kmsRoots
     ) external initializer {
         if (_owner == address(0) || _pauser == address(0) || _kms == address(0)) {
@@ -147,9 +157,7 @@ contract TeeSqlClusterApp is
 
         kms = _kms;
         clusterId = _clusterId;
-        leaseTTL = _leaseTTL;
         emit KmsSet(_kms);
-        emit LeaseTTLSet(_leaseTTL);
 
         for (uint256 i = 0; i < _kmsRoots.length; i++) {
             if (_kmsRoots[i] == address(0)) revert ZeroAddress();
@@ -200,19 +208,28 @@ contract TeeSqlClusterApp is
         address instanceId;
         string role;
         bytes endpoint;
+        bytes publicEndpoint;
     }
 
     /// @notice Registration binding commits to every registered field so a gas relay cannot
-    ///         rewrite role/endpoint/instance_id. Pins to (chainId, clusterApp) to prevent
-    ///         cross-contract / cross-chain replay.
-    function registrationMessage(address instanceId, string calldata role, bytes calldata endpoint)
-        public
-        view
-        returns (bytes32)
-    {
+    ///         rewrite role/endpoint/publicEndpoint/instance_id. Pins to (chainId, clusterApp) to
+    ///         prevent cross-contract / cross-chain replay.
+    function registrationMessage(
+        address instanceId,
+        string calldata role,
+        bytes calldata endpoint,
+        bytes calldata publicEndpoint
+    ) public view returns (bytes32) {
         return keccak256(
             abi.encode(
-                "teesql-cluster-register:v1", block.chainid, address(this), clusterId, instanceId, role, endpoint
+                "teesql-cluster-register:v1",
+                block.chainid,
+                address(this),
+                clusterId,
+                instanceId,
+                role,
+                endpoint,
+                publicEndpoint
             )
         );
     }
@@ -227,7 +244,7 @@ contract TeeSqlClusterApp is
         address passthrough = address(bytes20(codeId));
         if (!isOurPassthrough[passthrough]) revert WrongAppId();
 
-        bytes32 bindHash = registrationMessage(a.instanceId, a.role, a.endpoint);
+        bytes32 bindHash = registrationMessage(a.instanceId, a.role, a.endpoint, a.publicEndpoint);
         bytes32 bindEthHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", bindHash));
         address derivedAddr = DstackSigChain.compressedToAddress(derivedPubkey);
         address recovered = DstackSigChain.recover(bindEthHash, a.bindingSig);
@@ -241,8 +258,8 @@ contract TeeSqlClusterApp is
             passthrough: passthrough,
             role: a.role,
             endpoint: a.endpoint,
-            registeredAt: block.timestamp,
-            lastHeartbeat: block.timestamp
+            publicEndpoint: a.publicEndpoint,
+            registeredAt: block.timestamp
         });
         instanceToMember[a.instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
@@ -288,28 +305,88 @@ contract TeeSqlClusterApp is
 
     // --- Leader lease ---
 
-    function claimLeader(CallAuth calldata auth, bytes calldata newEndpoint) external whenNotPaused {
-        bytes32 memberId = _verifyCall(auth, this.claimLeader.selector, abi.encode(newEndpoint));
-        if (leaderLease.expiresAt > block.timestamp && leaderLease.memberId != memberId) {
-            revert LeaseActive();
+    /// @notice Canonical witness message. Voucher signs this to attest that the named
+    ///         leader is offline at the given epoch. Binding to (deposedMemberId, deposedEpoch)
+    ///         prevents cross-epoch replay.
+    function witnessMessage(bytes32 deposedMemberId, uint256 deposedEpoch, bytes32 voucherMemberId)
+        public
+        view
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                "teesql-leader-offline:v1",
+                block.chainid,
+                address(this),
+                clusterId,
+                deposedMemberId,
+                deposedEpoch,
+                voucherMemberId
+            )
+        );
+    }
+
+    /// @notice Claim leadership and publish an encrypted endpoint. First-ever claim and
+    ///         self-reclaim require no witnesses; replacing another leader requires ≥1
+    ///         witness from a non-claimant member attesting to the current leader being
+    ///         offline at the current epoch.
+    function claimLeader(CallAuth calldata auth, bytes calldata newEndpoint, Witness[] calldata witnesses)
+        external
+        whenNotPaused
+    {
+        bytes32 memberId = _verifyCall(auth, this.claimLeader.selector, abi.encode(newEndpoint, witnesses));
+
+        bytes32 currentLeaderId = leaderLease.memberId;
+        uint256 currentEpoch = leaderLease.epoch;
+
+        if (currentLeaderId != bytes32(0) && currentLeaderId != memberId) {
+            if (witnesses.length == 0) revert NoWitness();
+            bytes32[] memory seen = new bytes32[](witnesses.length);
+            for (uint256 i = 0; i < witnesses.length; i++) {
+                bytes32 vId = witnesses[i].voucherMemberId;
+                if (vId == memberId) revert SelfWitness();
+                if (_members[vId].registeredAt == 0) revert WitnessNotMember();
+                for (uint256 j = 0; j < i; j++) {
+                    if (seen[j] == vId) revert DuplicateWitness();
+                }
+                seen[i] = vId;
+
+                bytes32 wMsg = witnessMessage(currentLeaderId, currentEpoch, vId);
+                bytes32 wEthHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", wMsg));
+                address recovered = DstackSigChain.recover(wEthHash, witnesses[i].sig);
+                if (recovered != _members[vId].derivedAddr) revert BadWitnessSig();
+            }
         }
-        uint256 newEpoch = leaderLease.epoch + 1;
-        leaderLease = Lease({memberId: memberId, epoch: newEpoch, expiresAt: block.timestamp + leaseTTL});
+
+        uint256 newEpoch = currentEpoch + 1;
+        leaderLease = Lease({memberId: memberId, epoch: newEpoch});
         _members[memberId].endpoint = newEndpoint;
         emit LeaderClaimed(memberId, newEpoch, newEndpoint);
     }
 
-    function heartbeat(CallAuth calldata auth) external whenNotPaused {
-        bytes32 memberId = _verifyCall(auth, this.heartbeat.selector, "");
-        if (leaderLease.memberId == memberId) {
-            leaderLease.expiresAt = block.timestamp + leaseTTL;
-        }
-        _members[memberId].lastHeartbeat = block.timestamp;
-        emit Heartbeat(memberId, block.timestamp);
+    /// @notice Update this member's encrypted tailnet endpoint without bumping the leader epoch.
+    ///         Called by secondaries post-onboarding (once they have the cluster key) and on
+    ///         tailnet-IP changes.
+    function updateEndpoint(CallAuth calldata auth, bytes calldata newEndpoint) external whenNotPaused {
+        bytes32 memberId = _verifyCall(auth, this.updateEndpoint.selector, abi.encode(newEndpoint));
+        _members[memberId].endpoint = newEndpoint;
+        emit EndpointUpdated(memberId, newEndpoint);
+    }
+
+    /// @notice Update this member's customer-facing public URL. Changes rarely — only when
+    ///         a self-hosted operator changes their configured URL.
+    function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint)
+        external
+        whenNotPaused
+    {
+        bytes32 memberId =
+            _verifyCall(auth, this.updatePublicEndpoint.selector, abi.encode(newPublicEndpoint));
+        _members[memberId].publicEndpoint = newPublicEndpoint;
+        emit PublicEndpointUpdated(memberId, newPublicEndpoint);
     }
 
     function currentLeader() external view returns (Member memory) {
-        if (leaderLease.expiresAt < block.timestamp) revert NotLeaderClaimant();
+        if (leaderLease.memberId == bytes32(0)) revert NotLeaderClaimant();
         return _members[leaderLease.memberId];
     }
 
@@ -375,11 +452,6 @@ contract TeeSqlClusterApp is
     function setPeerApp(address p, bool allowed) external onlyOwner {
         allowedPeerApps[p] = allowed;
         emit PeerAppSet(p, allowed);
-    }
-
-    function setLeaseTTL(uint256 t) external onlyOwner {
-        leaseTTL = t;
-        emit LeaseTTLSet(t);
     }
 
     function setKms(address k) external onlyOwner {
