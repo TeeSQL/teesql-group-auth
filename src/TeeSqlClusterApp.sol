@@ -221,7 +221,10 @@ contract TeeSqlClusterApp is
         // Copy proof into memory (library takes memory struct)
         DstackSigChain.Proof memory proof = a.sigChainProof;
         (bytes32 codeId, bytes memory derivedPubkey) = DstackSigChain.verify(proof, this);
-        address passthrough = address(uint160(uint256(codeId)));
+        // codeId is bytes32(bytes20(app_id)) — left-aligned, consistent with
+        // what dstack KMS signed over and what DstackSigChain.verify requires.
+        // Take the leftmost 20 bytes, not the rightmost.
+        address passthrough = address(bytes20(codeId));
         if (!isOurPassthrough[passthrough]) revert WrongAppId();
 
         bytes32 bindHash = registrationMessage(a.instanceId, a.role, a.endpoint);
