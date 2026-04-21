@@ -40,8 +40,11 @@ library DstackSigChain {
         view
         returns (bytes32 codeId, bytes memory derivedPubkey)
     {
-        // Ensure codeId fits in 20 bytes (address space). Upper 12 bytes must be zero.
-        if (uint256(p.codeId) >> 160 != 0) revert InvalidSigChain();
+        // codeId = bytes32(bytes20(appId)): address occupies the top 20 bytes,
+        // bottom 12 bytes must be zero. bytes20(p.codeId) below relies on this
+        // layout (it takes the leftmost 20 bytes), as does the KMS signature
+        // which was computed over the raw 20-byte app_id in dstack.
+        if ((uint256(p.codeId) << 160) != 0) revert InvalidSigChain();
 
         // Step 1: App key signs "purpose:derivedPubkeyHex" -> recover app EOA
         address recoveredApp;
