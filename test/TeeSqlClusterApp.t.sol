@@ -34,8 +34,9 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
             passthrough: passthrough,
             role: role,
             endpoint: endpoint,
-            publicEndpoint: publicEndpoint,
-            registeredAt: block.timestamp
+            registeredAt: block.timestamp,
+            __deprecated_lastHeartbeat: 0,
+            publicEndpoint: publicEndpoint
         });
         instanceToMember[instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
@@ -314,7 +315,7 @@ contract TeeSqlClusterAppTest is Test {
 
         app.claimLeader(auth, endpoint, witnesses);
 
-        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
+        (bytes32 leaderId, uint256 epoch,) = app.leaderLease();
         assertEq(leaderId, aMemberId);
         assertEq(epoch, 1);
         assertEq(app.memberNonce(aMemberId), 1);
@@ -334,7 +335,7 @@ contract TeeSqlClusterAppTest is Test {
             _makeCallAuth(aMemberId, aPk, 1, app.claimLeader.selector, abi.encode(ep2, witnesses));
         app.claimLeader(auth2, ep2, witnesses);
 
-        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
+        (bytes32 leaderId, uint256 epoch,) = app.leaderLease();
         assertEq(leaderId, aMemberId);
         assertEq(epoch, 2);
     }
@@ -377,7 +378,7 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_takeoverSucceedsWithWitnessFromOtherMember() public {
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+        (bytes32 leaderId0, uint256 epoch0,) = app.leaderLease();
 
         // B claims, witnessed by C.
         bytes memory ep = hex"bb";
@@ -388,14 +389,14 @@ contract TeeSqlClusterAppTest is Test {
             _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
         app.claimLeader(bAuth, ep, witnesses);
 
-        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
+        (bytes32 leaderId, uint256 epoch,) = app.leaderLease();
         assertEq(leaderId, bMemberId);
         assertEq(epoch, epoch0 + 1);
     }
 
     function test_selfWitnessRejected() public {
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+        (bytes32 leaderId0, uint256 epoch0,) = app.leaderLease();
 
         // B claims but provides a witness from itself (claimant == voucher).
         bytes memory ep = hex"bb";
@@ -410,7 +411,7 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_duplicateWitnessRejected() public {
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+        (bytes32 leaderId0, uint256 epoch0,) = app.leaderLease();
 
         bytes memory ep = hex"bb";
         TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](2);
@@ -425,7 +426,7 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_witnessFromNonMemberRejected() public {
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+        (bytes32 leaderId0, uint256 epoch0,) = app.leaderLease();
 
         // Sign a witness with a random key + a bogus voucherMemberId.
         bytes32 bogusId = keccak256("not-a-member");
@@ -442,7 +443,7 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_witnessWithBadSigRejected() public {
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId0, uint256 epoch0) = app.leaderLease();
+        (bytes32 leaderId0, uint256 epoch0,) = app.leaderLease();
 
         // Voucher is C (a valid member) but signed by the wrong key (aPk).
         bytes memory ep = hex"bb";
@@ -458,7 +459,7 @@ contract TeeSqlClusterAppTest is Test {
     function test_crossEpochWitnessReplayRejected() public {
         // Epoch 1: A claims.
         _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
-        (bytes32 leaderId1, uint256 epoch1) = app.leaderLease();
+        (bytes32 leaderId1, uint256 epoch1,) = app.leaderLease();
 
         // C signs a valid witness for epoch 1.
         TeeSqlClusterApp.Witness memory epoch1Witness = _makeWitness(leaderId1, epoch1, cMemberId, cPk);
@@ -472,7 +473,7 @@ contract TeeSqlClusterAppTest is Test {
                 _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, ws));
             app.claimLeader(bAuth, ep, ws);
         }
-        (, uint256 epoch2) = app.leaderLease();
+        (, uint256 epoch2,) = app.leaderLease();
         assertEq(epoch2, epoch1 + 1);
 
         // Now A tries to take over at epoch 2 replaying C's original epoch-1 witness.

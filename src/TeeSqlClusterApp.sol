@@ -52,8 +52,9 @@ contract TeeSqlClusterApp is
         address passthrough;
         string role;
         bytes endpoint; // AES-GCM ct of tailnet IP; peer-to-peer only.
-        bytes publicEndpoint; // UTF-8 public URL (Phala gateway or operator host).
         uint256 registeredAt;
+        uint256 __deprecated_lastHeartbeat; // reserved: preserves slot 7 from pre-v2 layout
+        bytes publicEndpoint; // UTF-8 public URL (Phala gateway or operator host). Appended to preserve storage layout.
     }
     mapping(bytes32 => Member) internal _members;
     mapping(address => bytes32) public instanceToMember;
@@ -82,8 +83,10 @@ contract TeeSqlClusterApp is
     struct Lease {
         bytes32 memberId;
         uint256 epoch;
+        uint256 __deprecated_expiresAt;  // reserved: preserves slot 13 from pre-v2 layout
     }
     Lease public leaderLease;
+    uint256 private __deprecated_leaseTTL;  // reserved: preserves slot 14 from pre-v2 layout
 
     // --- Witness (for claimLeader) ---
     struct Witness {
@@ -258,8 +261,9 @@ contract TeeSqlClusterApp is
             passthrough: passthrough,
             role: a.role,
             endpoint: a.endpoint,
-            publicEndpoint: a.publicEndpoint,
-            registeredAt: block.timestamp
+            registeredAt: block.timestamp,
+            __deprecated_lastHeartbeat: 0,
+            publicEndpoint: a.publicEndpoint
         });
         instanceToMember[a.instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
@@ -359,7 +363,7 @@ contract TeeSqlClusterApp is
         }
 
         uint256 newEpoch = currentEpoch + 1;
-        leaderLease = Lease({memberId: memberId, epoch: newEpoch});
+        leaderLease = Lease({memberId: memberId, epoch: newEpoch, __deprecated_expiresAt: 0});
         _members[memberId].endpoint = newEndpoint;
         emit LeaderClaimed(memberId, newEpoch, newEndpoint);
     }
