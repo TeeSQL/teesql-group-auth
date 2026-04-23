@@ -55,6 +55,8 @@ contract TeeSqlClusterApp is
         uint256 registeredAt;
         uint256 __deprecated_lastHeartbeat; // reserved: preserves slot 7 from pre-v2 layout
         bytes publicEndpoint; // UTF-8 public URL (Phala gateway or operator host). Appended to preserve storage layout.
+        string dnsLabel; // Per-member DNS UUID (e.g. `a7f3k2m9ab`). Sidecar-derived from derivedPubkey; used to publish
+        // `status.<dnsLabel>.teesql.com` CNAMEs via the dns-controller. Appended.
     }
     mapping(bytes32 => Member) internal _members;
     mapping(address => bytes32) public instanceToMember;
@@ -83,10 +85,10 @@ contract TeeSqlClusterApp is
     struct Lease {
         bytes32 memberId;
         uint256 epoch;
-        uint256 __deprecated_expiresAt;  // reserved: preserves slot 13 from pre-v2 layout
+        uint256 __deprecated_expiresAt; // reserved: preserves slot 13 from pre-v2 layout
     }
     Lease public leaderLease;
-    uint256 private __deprecated_leaseTTL;  // reserved: preserves slot 14 from pre-v2 layout
+    uint256 private __deprecated_leaseTTL; // reserved: preserves slot 14 from pre-v2 layout
 
     // --- Witness (for claimLeader) ---
     struct Witness {
@@ -105,7 +107,7 @@ contract TeeSqlClusterApp is
     // --- Events ---
     event MemberPassthroughCreated(address indexed passthrough, bytes32 indexed salt);
     event MemberRegistered(
-        bytes32 indexed memberId, address indexed instanceId, address indexed passthrough, string role
+        bytes32 indexed memberId, address indexed instanceId, address indexed passthrough, string role, string dnsLabel
     );
     event InstanceBindingVerified(bytes32 indexed memberId, address indexed instanceId);
     event LeaderClaimed(bytes32 indexed memberId, uint256 indexed epoch, bytes endpoint);
@@ -212,27 +214,31 @@ contract TeeSqlClusterApp is
         string role;
         bytes endpoint;
         bytes publicEndpoint;
+        string dnsLabel;
     }
 
     /// @notice Registration binding commits to every registered field so a gas relay cannot
-    ///         rewrite role/endpoint/publicEndpoint/instance_id. Pins to (chainId, clusterApp) to
-    ///         prevent cross-contract / cross-chain replay.
+    ///         rewrite role/endpoint/publicEndpoint/dnsLabel/instance_id. Pins to (chainId, clusterApp)
+    ///         to prevent cross-contract / cross-chain replay. Version bumped to v2 to reflect
+    ///         dnsLabel inclusion — old v1 sigs will not verify and must be regenerated.
     function registrationMessage(
         address instanceId,
         string calldata role,
         bytes calldata endpoint,
-        bytes calldata publicEndpoint
+        bytes calldata publicEndpoint,
+        string calldata dnsLabel
     ) public view returns (bytes32) {
         return keccak256(
             abi.encode(
-                "teesql-cluster-register:v1",
+                "teesql-cluster-register:v2",
                 block.chainid,
                 address(this),
                 clusterId,
                 instanceId,
                 role,
                 endpoint,
-                publicEndpoint
+                publicEndpoint,
+                dnsLabel
             )
         );
     }
@@ -247,7 +253,7 @@ contract TeeSqlClusterApp is
         address passthrough = address(bytes20(codeId));
         if (!isOurPassthrough[passthrough]) revert WrongAppId();
 
-        bytes32 bindHash = registrationMessage(a.instanceId, a.role, a.endpoint, a.publicEndpoint);
+        bytes32 bindHash = registrationMessage(a.instanceId, a.role, a.endpoint, a.publicEndpoint, a.dnsLabel);
         bytes32 bindEthHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", bindHash));
         address derivedAddr = DstackSigChain.compressedToAddress(derivedPubkey);
         address recovered = DstackSigChain.recover(bindEthHash, a.bindingSig);
@@ -263,11 +269,12 @@ contract TeeSqlClusterApp is
             endpoint: a.endpoint,
             registeredAt: block.timestamp,
             __deprecated_lastHeartbeat: 0,
-            publicEndpoint: a.publicEndpoint
+            publicEndpoint: a.publicEndpoint,
+            dnsLabel: a.dnsLabel
         });
         instanceToMember[a.instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
-        emit MemberRegistered(memberId, a.instanceId, passthrough, a.role);
+        emit MemberRegistered(memberId, a.instanceId, passthrough, a.role, a.dnsLabel);
         emit InstanceBindingVerified(memberId, a.instanceId);
     }
 

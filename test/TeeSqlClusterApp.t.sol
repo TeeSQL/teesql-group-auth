@@ -36,7 +36,8 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
             endpoint: endpoint,
             registeredAt: block.timestamp,
             __deprecated_lastHeartbeat: 0,
-            publicEndpoint: publicEndpoint
+            publicEndpoint: publicEndpoint,
+            dnsLabel: ""
         });
         instanceToMember[instanceId] = memberId;
         derivedToMember[derivedAddr] = memberId;
