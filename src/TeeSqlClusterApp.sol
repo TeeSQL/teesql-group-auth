@@ -51,8 +51,8 @@ contract TeeSqlClusterApp is
         address derivedAddr;
         address passthrough;
         string role;
-        bytes endpoint;        // AES-GCM ct of tailnet IP; peer-to-peer only.
-        bytes publicEndpoint;  // UTF-8 public URL (Phala gateway or operator host).
+        bytes endpoint; // AES-GCM ct of tailnet IP; peer-to-peer only.
+        bytes publicEndpoint; // UTF-8 public URL (Phala gateway or operator host).
         uint256 registeredAt;
     }
     mapping(bytes32 => Member) internal _members;
@@ -375,12 +375,8 @@ contract TeeSqlClusterApp is
 
     /// @notice Update this member's customer-facing public URL. Changes rarely — only when
     ///         a self-hosted operator changes their configured URL.
-    function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint)
-        external
-        whenNotPaused
-    {
-        bytes32 memberId =
-            _verifyCall(auth, this.updatePublicEndpoint.selector, abi.encode(newPublicEndpoint));
+    function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint) external whenNotPaused {
+        bytes32 memberId = _verifyCall(auth, this.updatePublicEndpoint.selector, abi.encode(newPublicEndpoint));
         _members[memberId].publicEndpoint = newPublicEndpoint;
         emit PublicEndpointUpdated(memberId, newPublicEndpoint);
     }
