@@ -273,6 +273,83 @@ contract TeeSqlClusterAppTest is Test {
         assertEq(TeeSqlClusterMember(passthrough).owner(), NEW_OWNER);
     }
 
+    function test_passthroughAllowlistGettersForwardToCluster() public {
+        address passthrough = app.createMember(bytes32("p-allowlist"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        // Cluster has COMPOSE_HASH + DEVICE_ID added in setUp().
+        assertTrue(m.allowedComposeHashes(COMPOSE_HASH));
+        assertTrue(m.allowedDeviceIds(DEVICE_ID));
+        assertFalse(m.allowedComposeHashes(bytes32(uint256(0xBAD))));
+        assertFalse(m.allowedDeviceIds(bytes32(uint256(0xBAD))));
+        assertFalse(m.allowAnyDevice());
+
+        // Mutate the cluster's allowlist + allowAnyDevice flag, observe
+        // that the passthrough's reads track without caching.
+        bytes32 NEW_HASH = bytes32(uint256(0xC0DE2));
+        bytes32 NEW_DEV = bytes32(uint256(0xDEEF2));
+        vm.startPrank(OWNER);
+        app.addComposeHash(NEW_HASH);
+        app.addDevice(NEW_DEV);
+        app.setAllowAnyDevice(true);
+        vm.stopPrank();
+
+        assertTrue(m.allowedComposeHashes(NEW_HASH));
+        assertTrue(m.allowedDeviceIds(NEW_DEV));
+        assertTrue(m.allowAnyDevice());
+    }
+
+    function test_passthroughAdvertisesBasicManagementInterface() public {
+        address passthrough = app.createMember(bytes32("p-iface"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+        // IAppAuth (0x1e079198), IAppAuthBasicManagement (0x8fd37527),
+        // and IERC165 (0x01ffc9a7) all surface; arbitrary id stays false.
+        assertTrue(m.supportsInterface(type(IAppAuth).interfaceId));
+        assertTrue(m.supportsInterface(type(IAppAuthBasicManagement).interfaceId));
+        assertTrue(m.supportsInterface(0x01ffc9a7));
+        assertFalse(m.supportsInterface(0xdeadbeef));
+    }
+
+    function test_passthroughMutatorsForwardWhenCallerIsClusterOwner() public {
+        address passthrough = app.createMember(bytes32("p-mutator"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        bytes32 H = bytes32(uint256(0xC0DE3));
+        bytes32 D = bytes32(uint256(0xDEEF3));
+
+        // Cluster owner calls member.addComposeHash → forwards to cluster
+        // → the cluster's isOurPassthrough[member] check accepts it.
+        vm.prank(OWNER);
+        m.addComposeHash(H);
+        assertTrue(app.allowedComposeHashes(H));
+
+        vm.prank(OWNER);
+        m.addDevice(D);
+        assertTrue(app.allowedDeviceIds(D));
+
+        vm.prank(OWNER);
+        m.removeComposeHash(H);
+        assertFalse(app.allowedComposeHashes(H));
+
+        vm.prank(OWNER);
+        m.removeDevice(D);
+        assertFalse(app.allowedDeviceIds(D));
+    }
+
+    function test_passthroughMutatorsRejectNonOwnerCaller() public {
+        address passthrough = app.createMember(bytes32("p-mutator-rj"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        // ALICE is not the cluster owner — member-level gate fires first.
+        vm.prank(ALICE);
+        vm.expectRevert(TeeSqlClusterMember.NotClusterOwner.selector);
+        m.addComposeHash(bytes32(uint256(0xBAD)));
+
+        vm.prank(ALICE);
+        vm.expectRevert(TeeSqlClusterMember.NotClusterOwner.selector);
+        m.addDevice(bytes32(uint256(0xBAD)));
+    }
+
     // --- isAppAllowed gate ---
 
     function test_isAppAllowedPassesOnValidBoot() public view {
@@ -676,13 +753,30 @@ contract TeeSqlClusterAppTest is Test {
 
     // --- Admin ---
 
-    function test_onlyOwnerCanMutateAllowlists() public {
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(this)));
+    function test_onlyOwnerOrPassthroughCanMutateAllowlists() public {
+        // Test caller is neither the owner nor a registered passthrough,
+        // so addComposeHash now reverts with NotAuthorized() (the unified
+        // error from the new gate; previously it was OZ
+        // OwnableUnauthorizedAccount because addComposeHash was onlyOwner).
+        vm.expectRevert(TeeSqlClusterApp.NotAuthorized.selector);
         app.addComposeHash(bytes32(uint256(1)));
 
         vm.prank(OWNER);
         app.addComposeHash(bytes32(uint256(1)));
         assertTrue(app.allowedComposeHashes(bytes32(uint256(1))));
+
+        // A registered passthrough is also allowed (the path phala-cli
+        // takes when forwarding `addComposeHash` through the member).
+        vm.prank(passthroughA);
+        app.addComposeHash(bytes32(uint256(2)));
+        assertTrue(app.allowedComposeHashes(bytes32(uint256(2))));
+
+        // An unrelated contract address is NOT allowed even if it has
+        // a value in `isOurPassthrough` set to false.
+        address rogue = makeAddr("rogue-passthrough");
+        vm.prank(rogue);
+        vm.expectRevert(TeeSqlClusterApp.NotAuthorized.selector);
+        app.addComposeHash(bytes32(uint256(3)));
     }
 
     function test_authorizeAndRevokeSigner() public {

@@ -2,14 +2,21 @@
 pragma solidity ^0.8.24;
 
 import {IAppAuth} from "./IAppAuth.sol";
+import {IAppAuthBasicManagement} from "./IAppAuthBasicManagement.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-/// @notice Minimal subset of OZ `IOwnable` used to forward `owner()` to the
-///         parent cluster. We don't import OwnableUpgradeable here because
-///         the member is intentionally non-upgradeable and has no
-///         `__Ownable_init` to call — we just need the read view.
-interface IOwnedCluster {
+/// @notice Minimal read surface we forward to the parent cluster. The member
+///         is intentionally non-upgradeable and holds no state of its own;
+///         these getters mirror what `DstackApp.sol` (the dstack reference
+///         app contract) exposes via its `mapping public` declarations and
+///         OZ `OwnableUpgradeable`. Phala-cli + dstack tooling read these
+///         on a CVM's `app_id` during in-place updates; without them the
+///         caller can't tell our member apart from a non-conforming proxy.
+interface IClusterReadOnly {
     function owner() external view returns (address);
+    function allowedComposeHashes(bytes32) external view returns (bool);
+    function allowedDeviceIds(bytes32) external view returns (bool);
+    function allowAnyDevice() external view returns (bool);
 }
 
 /// @title TeeSqlClusterMember
@@ -53,10 +60,80 @@ contract TeeSqlClusterMember is IAppAuth {
     ///      EOA (or Safe) authorised to call `addDevice` / `addComposeHash`
     ///      on the parent — exactly what the CLI then attempts to do.
     function owner() external view returns (address) {
-        return IOwnedCluster(cluster).owner();
+        return IClusterReadOnly(cluster).owner();
+    }
+
+    /// @notice Forward `allowedComposeHashes(hash)` to the parent cluster.
+    /// @dev Phala's commit-update backend (and other dstack tooling) reads
+    ///      this getter on the CVM's `app_id` to confirm an upgrade-target
+    ///      compose hash is on-chain-allowlisted. The reference
+    ///      `DstackApp.sol` exposes it as the auto-getter from
+    ///      `mapping(bytes32 => bool) public allowedComposeHashes`. Our
+    ///      cluster pattern keeps the storage on the parent so it's shared
+    ///      across N member proxies; the member just forwards the read.
+    ///
+    ///      Pairs with the experiment in
+    ///      `dstackgres/docs/bug-reports/phala-cli-cvm-update-cluster-app-id.md`
+    ///      to test whether Failure 2 is satisfied by member-side getter
+    ///      passthroughs.
+    function allowedComposeHashes(bytes32 h) external view returns (bool) {
+        return IClusterReadOnly(cluster).allowedComposeHashes(h);
+    }
+
+    /// @notice Forward `allowedDeviceIds(deviceId)` to the parent cluster.
+    /// @dev Same reasoning as `allowedComposeHashes` above.
+    function allowedDeviceIds(bytes32 d) external view returns (bool) {
+        return IClusterReadOnly(cluster).allowedDeviceIds(d);
+    }
+
+    /// @notice Forward `allowAnyDevice()` to the parent cluster.
+    /// @dev DstackApp.sol exposes this as a flag that, when true, skips
+    ///      the device-id allowlist check. Forwarding lets Phala's
+    ///      pre-flight reach the same answer the boot path would.
+    function allowAnyDevice() external view returns (bool) {
+        return IClusterReadOnly(cluster).allowAnyDevice();
+    }
+
+    error NotClusterOwner();
+
+    /// @notice Forward `addComposeHash(hash)` to the parent cluster.
+    /// @dev phala-cli's in-place CVM-update flow signs an `addComposeHash`
+    ///      tx targeting the CVM's `app_id`. We accept the call from the
+    ///      cluster's owner EOA only and forward through. The cluster's
+    ///      `addComposeHash` recognises this passthrough as one of its
+    ///      registered members (`isOurPassthrough[msg.sender]`) and
+    ///      accepts the call — so end-to-end the only authority that can
+    ///      mutate the allowlist via this path is the cluster owner, the
+    ///      same as a direct call to `cluster.addComposeHash(hash)`.
+    function addComposeHash(bytes32 h) external {
+        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).addComposeHash(h);
+    }
+
+    /// @notice Forward `removeComposeHash(hash)` to the parent cluster.
+    /// @dev Same gating as `addComposeHash`.
+    function removeComposeHash(bytes32 h) external {
+        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).removeComposeHash(h);
+    }
+
+    /// @notice Forward `addDevice(deviceId)` to the parent cluster.
+    /// @dev Same gating as `addComposeHash`.
+    function addDevice(bytes32 d) external {
+        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).addDevice(d);
+    }
+
+    /// @notice Forward `removeDevice(deviceId)` to the parent cluster.
+    /// @dev Same gating as `addComposeHash`.
+    function removeDevice(bytes32 d) external {
+        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).removeDevice(d);
     }
 
     function supportsInterface(bytes4 id) external pure override returns (bool) {
-        return id == type(IAppAuth).interfaceId || id == type(IERC165).interfaceId;
+        return id == type(IAppAuth).interfaceId
+            || id == type(IAppAuthBasicManagement).interfaceId
+            || id == type(IERC165).interfaceId;
     }
 }

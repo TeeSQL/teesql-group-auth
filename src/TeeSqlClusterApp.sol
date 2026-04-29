@@ -137,6 +137,7 @@ contract TeeSqlClusterApp is
     error BadSig();
     error ZeroAddress();
     error BadPerms();
+    error NotAuthorized();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -407,23 +408,47 @@ contract TeeSqlClusterApp is
     }
 
     // --- Admin ---
+    //
+    // The four `IAppAuthBasicManagement` mutators accept calls from EITHER:
+    //   * the cluster owner (the canonical path), OR
+    //   * one of our own registered passthroughs (`isOurPassthrough[caller]`).
+    //
+    // The passthrough path exists so phala-cli's in-place CVM-update flow
+    // (`phala deploy --cvm-id`) can target the CVM's `app_id` (a passthrough)
+    // and have its `addComposeHash` / `addDevice` forward through to the
+    // cluster's allowlist. The trust model stays sound: passthroughs are
+    // minted exclusively by `createMember(onlyOwner)`, the member contract's
+    // own gate (see `TeeSqlClusterMember.addComposeHash`) requires
+    // `msg.sender == cluster.owner()` before forwarding, and the registered-
+    // passthrough check below confirms `msg.sender` is one of ours rather
+    // than an arbitrary contract impersonating a passthrough address.
 
-    function addComposeHash(bytes32 h) external override onlyOwner {
+    function _onlyOwnerOrPassthrough() internal view {
+        if (msg.sender != owner() && !isOurPassthrough[msg.sender]) {
+            revert NotAuthorized();
+        }
+    }
+
+    function addComposeHash(bytes32 h) external override {
+        _onlyOwnerOrPassthrough();
         allowedComposeHashes[h] = true;
         emit ComposeHashAdded(h);
     }
 
-    function removeComposeHash(bytes32 h) external override onlyOwner {
+    function removeComposeHash(bytes32 h) external override {
+        _onlyOwnerOrPassthrough();
         allowedComposeHashes[h] = false;
         emit ComposeHashRemoved(h);
     }
 
-    function addDevice(bytes32 d) external override onlyOwner {
+    function addDevice(bytes32 d) external override {
+        _onlyOwnerOrPassthrough();
         allowedDeviceIds[d] = true;
         emit DeviceAdded(d);
     }
 
-    function removeDevice(bytes32 d) external override onlyOwner {
+    function removeDevice(bytes32 d) external override {
+        _onlyOwnerOrPassthrough();
         allowedDeviceIds[d] = false;
         emit DeviceRemoved(d);
     }
