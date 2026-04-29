@@ -23,7 +23,6 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
         bytes memory derivedPubkey,
         address derivedAddr,
         address passthrough,
-        string memory role,
         bytes memory endpoint,
         bytes memory publicEndpoint
     ) external {
@@ -32,7 +31,6 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
             derivedPubkey: derivedPubkey,
             derivedAddr: derivedAddr,
             passthrough: passthrough,
-            role: role,
             endpoint: endpoint,
             registeredAt: block.timestamp,
             __deprecated_lastHeartbeat: 0,
@@ -140,13 +138,13 @@ contract TeeSqlClusterAppTest is Test {
         cInstanceId = makeAddr("instC");
 
         app.__testSetMember(
-            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA", "https://a.example"
+            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "endpointA", "https://a.example"
         );
         app.__testSetMember(
-            bMemberId, bInstanceId, bPubkey33, bAddr, passthroughB, "secondary", "endpointB", "https://b.example"
+            bMemberId, bInstanceId, bPubkey33, bAddr, passthroughB, "endpointB", "https://b.example"
         );
         app.__testSetMember(
-            cMemberId, cInstanceId, cPubkey33, cAddr, passthroughC, "secondary", "endpointC", "https://c.example"
+            cMemberId, cInstanceId, cPubkey33, cAddr, passthroughC, "endpointC", "https://c.example"
         );
     }
 
@@ -643,7 +641,7 @@ contract TeeSqlClusterAppTest is Test {
         TeeSqlClusterAppHarness app2 = TeeSqlClusterAppHarness(address(proxy2));
         app2.__testSetPassthrough(passthroughA, true);
         app2.__testSetMember(
-            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "primary", "endpointA", "https://a.example"
+            aMemberId, aInstanceId, aPubkey33, aAddr, passthroughA, "endpointA", "https://a.example"
         );
 
         bytes memory endpoint = hex"aa";
