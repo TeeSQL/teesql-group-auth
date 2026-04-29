@@ -260,6 +260,19 @@ contract TeeSqlClusterAppTest is Test {
         new TeeSqlClusterMember(address(0));
     }
 
+    function test_passthroughOwnerForwardsToCluster() public {
+        address passthrough = app.createMember(bytes32("p-owner"));
+        // Cluster owner is `OWNER` (set in setUp via __Ownable_init).
+        assertEq(TeeSqlClusterMember(passthrough).owner(), OWNER);
+
+        // Transfer cluster ownership and confirm the passthrough's owner()
+        // tracks it (read-only forward, no caching).
+        address NEW_OWNER = makeAddr("new-owner");
+        vm.prank(OWNER);
+        app.transferOwnership(NEW_OWNER);
+        assertEq(TeeSqlClusterMember(passthrough).owner(), NEW_OWNER);
+    }
+
     // --- isAppAllowed gate ---
 
     function test_isAppAllowedPassesOnValidBoot() public view {
