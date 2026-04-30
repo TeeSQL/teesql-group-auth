@@ -24,7 +24,8 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
         bytes memory endpoint,
         bytes memory publicEndpoint
     ) external {
-        _members[memberId] = Member({
+        ClusterStorage storage $ = _$();
+        $.members[memberId] = Member({
             instanceId: instanceId,
             derivedPubkey: derivedPubkey,
             derivedAddr: derivedAddr,
@@ -34,12 +35,12 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
             publicEndpoint: publicEndpoint,
             dnsLabel: ""
         });
-        instanceToMember[instanceId] = memberId;
-        derivedToMember[derivedAddr] = memberId;
+        $.instanceToMember[instanceId] = memberId;
+        $.derivedToMember[derivedAddr] = memberId;
     }
 
     function __testSetPassthrough(address p, bool v) external {
-        isOurPassthrough[p] = v;
+        _$().isOurPassthrough[p] = v;
     }
 }
 
@@ -183,6 +184,31 @@ contract TeeSqlClusterAppTest is Test {
         assertTrue(app.supportsInterface(type(IAppAuthBasicManagement).interfaceId));
         assertTrue(app.supportsInterface(0x01ffc9a7));
         assertFalse(app.supportsInterface(0xdeadbeef));
+    }
+
+    // --- ERC-7201 storage layout sanity ---
+
+    function test_storageLocationMatchesERC7201Derivation() public view {
+        bytes32 expected = keccak256(abi.encode(uint256(keccak256("teesql.storage.ClusterApp")) - 1))
+            & ~bytes32(uint256(0xff));
+        assertEq(app.STORAGE_LOCATION(), expected);
+    }
+
+    function test_clusterStorageActuallyAtNamespacedSlot() public view {
+        // ClusterStorage field offsets (declaration order, all 1-slot each):
+        //   0: clusterId             1: allowedComposeHashes  2: allowedDeviceIds
+        //   3: allowAnyDevice        4: allowedKmsRoots       5: members
+        //   6: instanceToMember      7: derivedToMember       8: memberNonce
+        //   9: onboarding           10: authorizedSigners    11: leaderMemberId
+        //  12: leaderEpoch          13: isOurPassthrough     14: kms
+        //  15: nextMemberSeq        16: pauser
+        //
+        // Verify by reading two fields whose values were set in setUp via initialize.
+        bytes32 base = app.STORAGE_LOCATION();
+        bytes32 kmsRaw = vm.load(address(app), bytes32(uint256(base) + 14));
+        bytes32 pauserRaw = vm.load(address(app), bytes32(uint256(base) + 16));
+        assertEq(address(uint160(uint256(kmsRaw))), address(mockKms));
+        assertEq(address(uint160(uint256(pauserRaw))), PAUSER);
     }
 
     // --- createMember / predictMember ---
