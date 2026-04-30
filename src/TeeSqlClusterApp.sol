@@ -4,7 +4,6 @@ pragma solidity ^0.8.24;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
@@ -25,14 +24,11 @@ contract TeeSqlClusterApp is
     Initializable,
     UUPSUpgradeable,
     OwnableUpgradeable,
-    AccessControlUpgradeable,
     PausableUpgradeable,
     IAppAuth,
     IAppAuthBasicManagement,
     IKmsRootRegistry
 {
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
     // --- Cluster identity ---
     string public clusterId;
 
@@ -102,6 +98,12 @@ contract TeeSqlClusterApp is
     address public kms;
     uint256 public nextMemberSeq;
 
+    // --- Pause authority ---
+    // Single-address pauser. Can pause(); unpause is owner-only. Both
+    // authorities live in the same place — owner — so transferOwnership
+    // moves all admin powers atomically (no orphan AccessControl roles).
+    address internal _pauser;
+
     // --- Events ---
     event MemberPassthroughCreated(address indexed passthrough, bytes32 indexed salt);
     event MemberRegistered(
@@ -118,6 +120,7 @@ contract TeeSqlClusterApp is
     event SignerRevoked(address indexed signer);
     event KmsSet(address indexed kms);
     event AllowAnyDeviceSet(bool value);
+    event PauserSet(address indexed pauser);
 
     // --- Errors ---
     error WrongAppId();
@@ -142,23 +145,21 @@ contract TeeSqlClusterApp is
 
     function initialize(
         address _owner,
-        address _pauser,
+        address _pauser_,
         address _kms,
         string calldata _clusterId,
         address[] calldata _kmsRoots
     ) external initializer {
-        if (_owner == address(0) || _pauser == address(0) || _kms == address(0)) {
+        if (_owner == address(0) || _pauser_ == address(0) || _kms == address(0)) {
             revert ZeroAddress();
         }
         __Ownable_init(_owner);
-        __AccessControl_init();
         __Pausable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-        _grantRole(PAUSER_ROLE, _pauser);
-
+        _pauser = _pauser_;
         kms = _kms;
         clusterId = _clusterId;
+        emit PauserSet(_pauser_);
         emit KmsSet(_kms);
 
         for (uint256 i = 0; i < _kmsRoots.length; i++) {
@@ -489,12 +490,27 @@ contract TeeSqlClusterApp is
     }
 
     // --- Pause ---
-    function pause() external onlyRole(PAUSER_ROLE) {
+    modifier onlyPauser() {
+        if (msg.sender != _pauser) revert NotAuthorized();
+        _;
+    }
+
+    function pause() external onlyPauser {
         _pause();
     }
 
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function unpause() external onlyOwner {
         _unpause();
+    }
+
+    function pauser() external view returns (address) {
+        return _pauser;
+    }
+
+    function setPauser(address p) external onlyOwner {
+        if (p == address(0)) revert ZeroAddress();
+        _pauser = p;
+        emit PauserSet(p);
     }
 
     // --- Views ---
@@ -511,15 +527,9 @@ contract TeeSqlClusterApp is
         return _onboarding[id];
     }
 
-    function supportsInterface(bytes4 id)
-        public
-        view
-        virtual
-        override(AccessControlUpgradeable, IERC165)
-        returns (bool)
-    {
+    function supportsInterface(bytes4 id) public view virtual override returns (bool) {
         return id == type(IAppAuth).interfaceId || id == type(IAppAuthBasicManagement).interfaceId
-            || super.supportsInterface(id);
+            || id == type(IERC165).interfaceId;
     }
 
     // --- UUPS ---

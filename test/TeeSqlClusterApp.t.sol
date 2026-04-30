@@ -5,8 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-
 import {TeeSqlClusterApp} from "../src/TeeSqlClusterApp.sol";
 import {TeeSqlClusterMember} from "../src/TeeSqlClusterMember.sol";
 import {IAppAuth} from "../src/IAppAuth.sol";
@@ -155,8 +153,7 @@ contract TeeSqlClusterAppTest is Test {
 
     function test_initStoresConfig() public view {
         assertEq(app.owner(), OWNER);
-        assertTrue(app.hasRole(app.PAUSER_ROLE(), PAUSER));
-        assertTrue(app.hasRole(app.DEFAULT_ADMIN_ROLE(), OWNER));
+        assertEq(app.pauser(), PAUSER);
         assertEq(app.kms(), address(mockKms));
         assertEq(app.clusterId(), "monitor");
         assertTrue(app.allowedKmsRoots(kmsRootA));
@@ -706,16 +703,14 @@ contract TeeSqlClusterAppTest is Test {
 
     // --- Pause ---
 
-    function test_pauserCanPauseAdminCanUnpause() public {
-        bytes32 adminRole = app.DEFAULT_ADMIN_ROLE();
+    function test_pauserCanPauseOwnerCanUnpause() public {
         vm.prank(PAUSER);
         app.pause();
         assertTrue(app.paused());
 
-        bytes memory expected =
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, PAUSER, adminRole);
+        // Pauser can NOT unpause — that's owner-only.
         vm.prank(PAUSER);
-        vm.expectRevert(expected);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, PAUSER));
         app.unpause();
 
         vm.prank(OWNER);
@@ -724,11 +719,32 @@ contract TeeSqlClusterAppTest is Test {
     }
 
     function test_nonPauserCannotPause() public {
-        bytes32 pauserRole = app.PAUSER_ROLE();
-        vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, address(this), pauserRole)
-        );
+        vm.expectRevert(TeeSqlClusterApp.NotAuthorized.selector);
         app.pause();
+    }
+
+    function test_setPauserOnlyOwnerAndUpdates() public {
+        address newPauser = makeAddr("newPauser");
+
+        // Non-owner can't rotate.
+        vm.prank(PAUSER);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, PAUSER));
+        app.setPauser(newPauser);
+
+        // Owner can.
+        vm.prank(OWNER);
+        app.setPauser(newPauser);
+        assertEq(app.pauser(), newPauser);
+
+        // Old pauser loses the power.
+        vm.prank(PAUSER);
+        vm.expectRevert(TeeSqlClusterApp.NotAuthorized.selector);
+        app.pause();
+
+        // New pauser holds it.
+        vm.prank(newPauser);
+        app.pause();
+        assertTrue(app.paused());
     }
 
     function test_pauseBlocksAuthenticatedCalls() public {
