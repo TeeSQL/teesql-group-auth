@@ -194,6 +194,11 @@ contract TeeSqlClusterAppTest is Test {
         assertEq(app.STORAGE_LOCATION(), expected);
     }
 
+    function test_reinitializePlaceholderRevertsInV1() public {
+        vm.expectRevert(bytes("TeeSqlClusterApp: no reinitializer for this version"));
+        app.reinitialize(2, "");
+    }
+
     function test_clusterStorageActuallyAtNamespacedSlot() public view {
         // ClusterStorage field offsets (declaration order, all 1-slot each):
         //   0: clusterId             1: allowedComposeHashes  2: allowedDeviceIds

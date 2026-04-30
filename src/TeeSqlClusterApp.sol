@@ -172,6 +172,45 @@ contract TeeSqlClusterApp is
         _disableInitializers();
     }
 
+    /// @notice One-shot v1 initializer. Sets owner, pauser, kms, clusterId, and
+    ///         seeds allowed KMS roots. Locked via OZ's `initializer` modifier —
+    ///         can never be called twice.
+    ///
+    /// @dev    For future upgrades that need to populate newly-added fields in
+    ///         `ClusterStorage`, use OZ's `reinitializer(N)` mechanism. There
+    ///         are two equivalent conventions, both supported here:
+    ///
+    ///         (1) **Override the `reinitialize` virtual hook below.** v2+ keeps
+    ///             a single entry point with a generic `(uint64 version, bytes
+    ///             data)` signature, which makes upgrade-tooling consistent
+    ///             across versions:
+    ///
+    ///                 function reinitialize(uint64 version, bytes calldata data)
+    ///                     public override reinitializer(version)
+    ///                 {
+    ///                     require(version == 2, "wrong version");
+    ///                     (address treasury) = abi.decode(data, (address));
+    ///                     _$().treasury = treasury;
+    ///                 }
+    ///
+    ///         (2) **Add a per-version sibling** like `reinitializeV2` (closer
+    ///             to OZ's documented convention; one function per release):
+    ///
+    ///                 function reinitializeV2(address treasury) external reinitializer(2) {
+    ///                     _$().treasury = treasury;
+    ///                 }
+    ///
+    ///         Either way, run the upgrade atomically with the init call so the
+    ///         new state can never be observed in an uninitialized middle state:
+    ///
+    ///             cluster.upgradeToAndCall(
+    ///                 newImpl,
+    ///                 abi.encodeCall(this.reinitializeV2, (treasury))
+    ///             );
+    ///
+    ///         `reinitializer(N)` allows the call exactly once when the version
+    ///         sentinel is `< N`, then bumps it to `N`. Versions are strictly
+    ///         monotonic; never reuse a prior N.
     function initialize(
         address _owner,
         address _pauser_,
@@ -197,6 +236,18 @@ contract TeeSqlClusterApp is
             $.allowedKmsRoots[_kmsRoots[i]] = true;
             emit KmsRootAdded(_kmsRoots[i]);
         }
+    }
+
+    /// @notice Convention placeholder for v2+ post-upgrade state migrations.
+    ///         v1 has no fields to migrate, so this reverts to keep stale
+    ///         operator scripts from accidentally consuming a version
+    ///         sentinel. Future versions OVERRIDE this hook (or define a
+    ///         per-version sibling like `reinitializeV2`) — see the doc-
+    ///         comment on `initialize` above for the full pattern.
+    /// @dev    Intentionally NOT marked with `reinitializer(N)` — the
+    ///         override is responsible for choosing the version.
+    function reinitialize(uint64, bytes calldata) public virtual {
+        revert("TeeSqlClusterApp: no reinitializer for this version");
     }
 
     // --- Passthrough factory ---
