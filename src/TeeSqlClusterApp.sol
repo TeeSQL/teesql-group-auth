@@ -52,15 +52,10 @@ contract TeeSqlClusterApp is
         address passthrough;
         bytes endpoint; // AES-GCM ct of tailnet IP; peer-to-peer only.
         uint256 registeredAt;
-        uint256 __deprecated_lastHeartbeat; // reserved: preserves slot 6 from pre-v3 layout
         bytes publicEndpoint; // UTF-8 public URL (Phala gateway or operator host).
         string dnsLabel; // Per-member DNS UUID (e.g. `a7f3k2m9ab`). Sidecar-derived from derivedPubkey; used to publish
         // `status.<dnsLabel>.teesql.com` CNAMEs via the dns-controller.
     }
-    // v3: `string role` removed. The on-chain `leaderLease().memberId` is the
-    // sole authoritative role identifier — the cluster contract no longer
-    // tracks a separate per-member primary/secondary tag. Storage layout
-    // shifts vs v2; this is a fresh-deploy contract, not a UUPS upgrade.
     mapping(bytes32 => Member) internal _members;
     mapping(address => bytes32) public instanceToMember;
     mapping(address => bytes32) public derivedToMember;
@@ -88,19 +83,14 @@ contract TeeSqlClusterApp is
     struct Lease {
         bytes32 memberId;
         uint256 epoch;
-        uint256 __deprecated_expiresAt; // reserved: preserves slot 13 from pre-v2 layout
     }
     Lease public leaderLease;
-    uint256 private __deprecated_leaseTTL; // reserved: preserves slot 14 from pre-v2 layout
 
     // --- Witness (for claimLeader) ---
     struct Witness {
         bytes32 voucherMemberId;
         bytes sig;
     }
-
-    // --- Peering ---
-    mapping(address => bool) public allowedPeerApps;
 
     // --- Passthrough registry ---
     mapping(address => bool) public isOurPassthrough;
@@ -121,12 +111,10 @@ contract TeeSqlClusterApp is
     event KmsRootRemoved(address indexed root);
     event SignerAuthorized(address indexed signer, uint8 permissions);
     event SignerRevoked(address indexed signer);
-    event PeerAppSet(address indexed peerApp, bool allowed);
     event KmsSet(address indexed kms);
     event AllowAnyDeviceSet(bool value);
 
     // --- Errors ---
-    error VerifierFailed();
     error WrongAppId();
     error InstanceBindingInvalid();
     error NotMember();
@@ -269,7 +257,6 @@ contract TeeSqlClusterApp is
             passthrough: passthrough,
             endpoint: a.endpoint,
             registeredAt: block.timestamp,
-            __deprecated_lastHeartbeat: 0,
             publicEndpoint: a.publicEndpoint,
             dnsLabel: a.dnsLabel
         });
@@ -371,7 +358,7 @@ contract TeeSqlClusterApp is
         }
 
         uint256 newEpoch = currentEpoch + 1;
-        leaderLease = Lease({memberId: memberId, epoch: newEpoch, __deprecated_expiresAt: 0});
+        leaderLease = Lease({memberId: memberId, epoch: newEpoch});
         _members[memberId].endpoint = newEndpoint;
         emit LeaderClaimed(memberId, newEpoch, newEndpoint);
     }
@@ -479,11 +466,6 @@ contract TeeSqlClusterApp is
     function revokeSigner(address s) external onlyOwner {
         authorizedSigners[s].active = false;
         emit SignerRevoked(s);
-    }
-
-    function setPeerApp(address p, bool allowed) external onlyOwner {
-        allowedPeerApps[p] = allowed;
-        emit PeerAppSet(p, allowed);
     }
 
     function setKms(address k) external onlyOwner {
