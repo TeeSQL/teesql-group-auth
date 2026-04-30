@@ -133,6 +133,60 @@ contract TeeSqlClusterApp is
         }
     }
 
+    // --- Version markers ---
+    //
+    // Two independent counters live in this contract. Don't conflate them.
+    //
+    //   `version()` (below) — implementation identity. Bump on every impl
+    //   upgrade so operators can tell at a glance which logic the proxy is
+    //   running. v1 is the first stable impl shipped under the
+    //   ERC-7201 + Ownable-only design; bump to "v2" the first time
+    //   `upgradeToAndCall` lands a new impl.
+    //
+    //   `_REGISTER_MSG_PREFIX` / `_CALL_MSG_PREFIX` / `_WITNESS_MSG_PREFIX`
+    //   below — *signed-message format* identifiers. Each is a non-replay
+    //   tag baked into the keccak256 input the sidecar signs. Bump them
+    //   ONLY when the message *fields or encoding* change (different
+    //   args, different abi.encode order, etc.) — not on every impl
+    //   upgrade. A contract `version()` bump that doesn't change message
+    //   shapes leaves these alone.
+    //
+    //   When a format version bumps, the contract constant AND any
+    //   sidecar/CLI Rust code that reproduces the prefix locally must
+    //   change in lockstep — otherwise the sidecar's signature won't
+    //   verify. Today the only Rust-side reproduction is
+    //   `_CALL_MSG_PREFIX` in
+    //   `open-source/teesql-sidecar/crates/sidecar/src/group_auth.rs`
+    //   (the sidecar fetches the other two via on-chain `registrationMessage()`
+    //   and `witnessMessage()` views, so changing those is contract-only).
+
+    /// Registration-message tag. Bumped to `:v3` on 2026-04-29 to drop the
+    /// `role` field and lock out v2 sidecars (see
+    /// `docs/state/2026-04-30-runtime-role-status.md`). Computed entirely
+    /// on-chain via `registrationMessage()`; sidecars do not reproduce this
+    /// string locally.
+    string private constant _REGISTER_MSG_PREFIX = "teesql-cluster-register:v3";
+
+    /// Per-call-auth tag. Reproduced verbatim in sidecar
+    /// `group_auth.rs`'s `call_auth_hash` for off-chain pre-computation —
+    /// must change in lockstep on any format bump.
+    string private constant _CALL_MSG_PREFIX = "teesql-cluster-call:v1";
+
+    /// Witness (offline-leader-attestation) tag. Computed on-chain via
+    /// `witnessMessage()`; sidecars do not reproduce this string locally.
+    string private constant _WITNESS_MSG_PREFIX = "teesql-leader-offline:v1";
+
+    /// @notice Implementation identity. Increments on every UUPS impl
+    ///         upgrade ("v1", "v2", "v3", …). Operator-facing: the answer
+    ///         to "which logic is this proxy running?" without
+    ///         eth_getStorageAt'ing the EIP-1967 implementation slot.
+    /// @dev    Distinct from the internal signed-message format markers
+    ///         (`_REGISTER_MSG_PREFIX` etc.) which only bump when the
+    ///         message *shape* changes. See the version-markers block above.
+    function version() external pure returns (string memory) {
+        return "v1";
+    }
+
     // --- Events ---
     event MemberPassthroughCreated(address indexed passthrough, bytes32 indexed salt);
     event MemberRegistered(
@@ -297,7 +351,7 @@ contract TeeSqlClusterApp is
     ) public view returns (bytes32) {
         return keccak256(
             abi.encode(
-                "teesql-cluster-register:v3",
+                _REGISTER_MSG_PREFIX,
                 block.chainid,
                 address(this),
                 _$().clusterId,
@@ -349,7 +403,7 @@ contract TeeSqlClusterApp is
     {
         return keccak256(
             abi.encode(
-                "teesql-cluster-call:v1", block.chainid, address(this), memberId, nonce, selector, keccak256(args)
+                _CALL_MSG_PREFIX, block.chainid, address(this), memberId, nonce, selector, keccak256(args)
             )
         );
     }
@@ -383,7 +437,7 @@ contract TeeSqlClusterApp is
     {
         return keccak256(
             abi.encode(
-                "teesql-leader-offline:v1",
+                _WITNESS_MSG_PREFIX,
                 block.chainid,
                 address(this),
                 _$().clusterId,

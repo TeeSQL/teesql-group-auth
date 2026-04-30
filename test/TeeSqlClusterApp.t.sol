@@ -186,6 +186,12 @@ contract TeeSqlClusterAppTest is Test {
         assertFalse(app.supportsInterface(0xdeadbeef));
     }
 
+    function test_version() public view {
+        // Bump in lockstep with every impl upgrade. CI test acts as a
+        // forgotten-bump tripwire: change the impl, you must change this.
+        assertEq(app.version(), "v1");
+    }
+
     // --- ERC-7201 storage layout sanity ---
 
     function test_storageLocationMatchesERC7201Derivation() public view {
