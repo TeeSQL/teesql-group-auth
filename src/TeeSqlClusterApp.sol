@@ -80,11 +80,16 @@ contract TeeSqlClusterApp is
     // No TTL: leadership holds until a higher-epoch claimLeader() replaces it.
     // Liveness is proven off-chain via TEE peer-to-peer challenges; the chain
     // records only cluster shape changes.
-    struct Lease {
-        bytes32 memberId;
-        uint256 epoch;
-    }
-    Lease public leaderLease;
+    //
+    // Stored as two flat slots rather than an inline struct so future fields
+    // (e.g. claimedAt, endpointKeyId) can be added at the END of the
+    // contract's state layout without shifting any existing slots. An inline
+    // struct here would put `isOurPassthrough` / `kms` / `nextMemberSeq`
+    // directly after Lease's slots — growing the struct would silently
+    // shift those down. The `leaderLease()` view below preserves the
+    // historical 2-tuple ABI for off-chain consumers.
+    bytes32 internal _leaderMemberId;
+    uint256 internal _leaderEpoch;
 
     // --- Witness (for claimLeader) ---
     struct Witness {
@@ -335,8 +340,8 @@ contract TeeSqlClusterApp is
     {
         bytes32 memberId = _verifyCall(auth, this.claimLeader.selector, abi.encode(newEndpoint, witnesses));
 
-        bytes32 currentLeaderId = leaderLease.memberId;
-        uint256 currentEpoch = leaderLease.epoch;
+        bytes32 currentLeaderId = _leaderMemberId;
+        uint256 currentEpoch = _leaderEpoch;
 
         if (currentLeaderId != bytes32(0) && currentLeaderId != memberId) {
             if (witnesses.length == 0) revert NoWitness();
@@ -358,7 +363,8 @@ contract TeeSqlClusterApp is
         }
 
         uint256 newEpoch = currentEpoch + 1;
-        leaderLease = Lease({memberId: memberId, epoch: newEpoch});
+        _leaderMemberId = memberId;
+        _leaderEpoch = newEpoch;
         _members[memberId].endpoint = newEndpoint;
         emit LeaderClaimed(memberId, newEpoch, newEndpoint);
     }
@@ -381,8 +387,16 @@ contract TeeSqlClusterApp is
     }
 
     function currentLeader() external view returns (Member memory) {
-        if (leaderLease.memberId == bytes32(0)) revert NotLeaderClaimant();
-        return _members[leaderLease.memberId];
+        if (_leaderMemberId == bytes32(0)) revert NotLeaderClaimant();
+        return _members[_leaderMemberId];
+    }
+
+    /// @notice ABI-compatible view that mirrors the historical
+    ///         `Lease public leaderLease` auto-getter shape so off-chain
+    ///         consumers (sidecar, dns-controller, common) keep working
+    ///         unchanged.
+    function leaderLease() external view returns (bytes32 memberId, uint256 epoch) {
+        return (_leaderMemberId, _leaderEpoch);
     }
 
     // --- Onboarding ---
