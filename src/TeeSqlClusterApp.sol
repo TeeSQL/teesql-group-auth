@@ -311,6 +311,15 @@ contract TeeSqlClusterApp is
     /// @notice CREATE2-deploy a new TeeSqlClusterMember passthrough and register it with DstackKms.
     /// @dev    Permissionless: deploying a passthrough is inert until a CVM boots under it and passes
     ///         `register()`. Compose/device/KMS-root allowlists gate any effective use.
+    ///
+    ///         **Impl-specific bytecode.** The deployed passthrough's bytecode is
+    ///         `type(TeeSqlClusterMember).creationCode` baked in at THIS cluster
+    ///         impl's compile time. A future cluster UUPS upgrade that also
+    ///         modifies `TeeSqlClusterMember` will produce a different bytecode
+    ///         hash → a different CREATE2 address space for the same salt. Already-
+    ///         deployed members keep working at their original addresses; new
+    ///         members deployed after the upgrade live in the new address space.
+    ///         See `predictMember` for the operator-side implication.
     function createMember(bytes32 salt) external whenNotPaused returns (address passthrough) {
         ClusterStorage storage $ = _$();
         bytes32 effectiveSalt = salt == bytes32(0) ? bytes32(uint256($.nextMemberSeq++)) : salt;
@@ -321,6 +330,22 @@ contract TeeSqlClusterApp is
     }
 
     /// @notice Predict a passthrough address for a given salt without deploying.
+    /// @dev    The returned address is computed from `(0xff, cluster, salt,
+    ///         keccak256(creationCode || abi.encode(cluster)))` per CREATE2 — and
+    ///         `creationCode` is the CURRENT cluster impl's bytecode for
+    ///         `TeeSqlClusterMember`. That means:
+    ///
+    ///         **Predictions are NOT stable across cluster impl upgrades that
+    ///         change `TeeSqlClusterMember`.** A salt that resolves to address
+    ///         `0xAAA…` under cluster impl v1 may resolve to `0xBBB…` under v2.
+    ///         The cluster's `createMember` and `predictMember` use the same
+    ///         `creationCode` reference within one impl, so they stay in sync —
+    ///         but never persist a (salt → predicted address) pair across an
+    ///         upgrade boundary.
+    ///
+    ///         **Operator rule:** always recompute the prediction immediately
+    ///         before calling `createMember`. Don't cache it in config files,
+    ///         deploy scripts, or runbooks longer than a single deploy attempt.
     function predictMember(bytes32 salt) external view returns (address) {
         bytes32 effectiveSalt = salt == bytes32(0) ? bytes32(uint256(_$().nextMemberSeq)) : salt;
         bytes32 bytecodeHash =
