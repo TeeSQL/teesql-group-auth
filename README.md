@@ -129,21 +129,22 @@ forge script script/Deploy.s.sol:Deploy \
 
 ## Governance
 
-All proxies are `UUPSUpgradeable` + `OwnableUpgradeable` with the owner set
-to a Gnosis Safe multisig. Upgrades and admin operations (adding KMS roots,
-compose hashes, device ids, signers, verifiers) happen through Safe
+All proxies are `UUPSUpgradeable` + `Ownable2StepUpgradeable` with the
+owner set to a Gnosis Safe multisig. Ownership transfers are two-step
+(`transferOwnership` → `acceptOwnership`) to prevent fat-fingered handoffs
+to addresses nobody controls. Upgrades and admin operations (adding KMS
+roots, compose hashes, device ids, signers) happen through Safe
 transactions, typically generated as Transaction Builder JSON bundles.
 
-`TeeSqlClusterApp` additionally exposes `AccessControlUpgradeable`
-(`PAUSER_ROLE`) and `PausableUpgradeable` for operational circuit-breaking
-independent of the upgrade path.
+`TeeSqlClusterApp` additionally exposes `PausableUpgradeable` with a
+single `pauser()` address (rotatable via owner-only `setPauser`) for
+operational circuit-breaking independent of the upgrade path.
 
-> **Storage layout warning.** `TeeSqlClusterApp` has been live through
-> multiple upgrades; Member slot 7 and related fields are reserved to
-> preserve the pre-v2 layout. Do **not** introduce struct size changes or
-> field reorderings without auditing layout drift against the deployed
-> proxy — mapping base slots are silently affected by any preceding
-> storage change.
+> **Storage layout note.** `TeeSqlClusterApp` v1 holds all of its state
+> in a single ERC-7201 namespaced struct (`ClusterStorage`) at slot
+> `0x41483450a74c9b52ed8d4d09a3915b6b80e5239e1c6e8f2780ae20665a6daa00`.
+> Future upgrades append fields to that struct (never insert or reorder)
+> — see the inline comment in `TeeSqlClusterApp.sol`.
 
 ## Credits
 

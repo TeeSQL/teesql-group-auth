@@ -296,12 +296,46 @@ contract TeeSqlClusterAppTest is Test {
         // Cluster owner is `OWNER` (set in setUp via __Ownable_init).
         assertEq(TeeSqlClusterMember(passthrough).owner(), OWNER);
 
-        // Transfer cluster ownership and confirm the passthrough's owner()
-        // tracks it (read-only forward, no caching).
+        // Transfer cluster ownership using Ownable2Step's two-step flow,
+        // then confirm the passthrough's owner() tracks it (read-only
+        // forward, no caching).
         address NEW_OWNER = makeAddr("new-owner");
         vm.prank(OWNER);
         app.transferOwnership(NEW_OWNER);
+
+        // After transferOwnership, ownership has NOT changed yet.
+        assertEq(app.owner(), OWNER);
+        assertEq(app.pendingOwner(), NEW_OWNER);
+        assertEq(TeeSqlClusterMember(passthrough).owner(), OWNER);
+
+        // The pending owner accepts.
+        vm.prank(NEW_OWNER);
+        app.acceptOwnership();
+        assertEq(app.owner(), NEW_OWNER);
+        assertEq(app.pendingOwner(), address(0));
         assertEq(TeeSqlClusterMember(passthrough).owner(), NEW_OWNER);
+    }
+
+    function test_acceptOwnershipRejectsNonPending() public {
+        address NEW_OWNER = makeAddr("new-owner-2");
+        address INTRUDER = makeAddr("intruder");
+
+        vm.prank(OWNER);
+        app.transferOwnership(NEW_OWNER);
+
+        // A random address can't claim — even though the slot is "open".
+        vm.prank(INTRUDER);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, INTRUDER));
+        app.acceptOwnership();
+
+        // The OLD owner can't accept their own pending tx either.
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, OWNER));
+        app.acceptOwnership();
+
+        // Pending state is unchanged after the rejected attempts.
+        assertEq(app.owner(), OWNER);
+        assertEq(app.pendingOwner(), NEW_OWNER);
     }
 
     function test_passthroughAllowlistGettersForwardToCluster() public {
