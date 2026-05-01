@@ -20,11 +20,18 @@ interface IClusterReadOnly {
 }
 
 /// @title TeeSqlClusterMember
-/// @notice Per-CVM passthrough that forwards IAppAuth.isAppAllowed to a TeeSqlClusterApp.
+/// @notice Per-CVM passthrough that forwards admin and boot-gate calls to a TeeSqlClusterApp.
 /// @dev No mutable storage, no admin, no upgrade path. Exists only to give each CVM a unique
 ///      address usable as its DstackKms `app_id`. All logic and state live on the cluster
 ///      contract. `cluster` is an immutable baked into bytecode at construction.
-contract TeeSqlClusterMember is IAppAuth {
+///
+///      Inherits `IAppAuthBasicManagement` (not `IAppAuth`) because the member's *own*
+///      authoritative surface is the management forward — phala-cli reads/writes the
+///      compose-hash and device allowlists on the CVM's `app_id`, and we expose those
+///      functions natively as a registered interface. `isAppAllowed` exists too, but it's
+///      a thin relay to the cluster (which is the IAppAuth implementer) rather than a
+///      decision this contract makes; we still advertise IAppAuth via supportsInterface.
+contract TeeSqlClusterMember is IAppAuthBasicManagement {
     /// @notice The TeeSqlClusterApp this passthrough routes to.
     address public immutable cluster;
 
@@ -35,14 +42,15 @@ contract TeeSqlClusterMember is IAppAuth {
         cluster = _cluster;
     }
 
-    /// @inheritdoc IAppAuth
+    /// @notice Forward `IAppAuth.isAppAllowed` to the parent cluster.
     /// @dev Called by DstackKms during CVM boot with `bootInfo.appId == address(this)`.
     ///      We forward unchanged; the cluster validates compose hash, device id, and
-    ///      defensively checks `isOurPassthrough[bootInfo.appId]`.
-    function isAppAllowed(AppBootInfo calldata bootInfo)
+    ///      defensively checks `isOurPassthrough[bootInfo.appId]`. Not an `override` —
+    ///      this contract no longer inherits `IAppAuth` — but the selector is the same
+    ///      so DstackKms's `IAppAuth(appId).isAppAllowed(..)` ABI call still resolves.
+    function isAppAllowed(IAppAuth.AppBootInfo calldata bootInfo)
         external
         view
-        override
         returns (bool isAllowed, string memory reason)
     {
         return IAppAuth(cluster).isAppAllowed(bootInfo);
@@ -105,28 +113,28 @@ contract TeeSqlClusterMember is IAppAuth {
     ///      accepts the call — so end-to-end the only authority that can
     ///      mutate the allowlist via this path is the cluster owner, the
     ///      same as a direct call to `cluster.addComposeHash(hash)`.
-    function addComposeHash(bytes32 h) external {
+    function addComposeHash(bytes32 h) external override {
         if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).addComposeHash(h);
     }
 
     /// @notice Forward `removeComposeHash(hash)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
-    function removeComposeHash(bytes32 h) external {
+    function removeComposeHash(bytes32 h) external override {
         if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).removeComposeHash(h);
     }
 
     /// @notice Forward `addDevice(deviceId)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
-    function addDevice(bytes32 d) external {
+    function addDevice(bytes32 d) external override {
         if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).addDevice(d);
     }
 
     /// @notice Forward `removeDevice(deviceId)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
-    function removeDevice(bytes32 d) external {
+    function removeDevice(bytes32 d) external override {
         if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).removeDevice(d);
     }
