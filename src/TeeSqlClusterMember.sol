@@ -5,20 +5,6 @@ import {IAppAuth} from "./IAppAuth.sol";
 import {IAppAuthBasicManagement} from "./IAppAuthBasicManagement.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
-/// @notice Minimal read surface we forward to the parent cluster. The member
-///         is intentionally non-upgradeable and holds no state of its own;
-///         these getters mirror what `DstackApp.sol` (the dstack reference
-///         app contract) exposes via its `mapping public` declarations and
-///         OZ `OwnableUpgradeable`. Phala-cli + dstack tooling read these
-///         on a CVM's `app_id` during in-place updates; without them the
-///         caller can't tell our member apart from a non-conforming proxy.
-interface IClusterReadOnly {
-    function owner() external view returns (address);
-    function allowedComposeHashes(bytes32) external view returns (bool);
-    function allowedDeviceIds(bytes32) external view returns (bool);
-    function allowAnyDevice() external view returns (bool);
-}
-
 /// @title TeeSqlClusterMember
 /// @notice Per-CVM passthrough that forwards admin and boot-gate calls to a TeeSqlClusterApp.
 /// @dev No mutable storage, no admin, no upgrade path. Exists only to give each CVM a unique
@@ -31,6 +17,11 @@ interface IClusterReadOnly {
 ///      functions natively as a registered interface. `isAppAllowed` exists too, but it's
 ///      a thin relay to the cluster (which is the IAppAuth implementer) rather than a
 ///      decision this contract makes; we still advertise IAppAuth via supportsInterface.
+///
+///      All read forwarders below cast `cluster` as `IAppAuthBasicManagement`. After the
+///      interface expansion (added `owner`, allowlist getters, `version`, the TCB-policy
+///      surface), the management interface itself covers every read we forward, so a
+///      separate ad-hoc read interface is no longer needed.
 contract TeeSqlClusterMember is IAppAuthBasicManagement {
     /// @notice The TeeSqlClusterApp this passthrough routes to.
     address public immutable cluster;
@@ -57,18 +48,22 @@ contract TeeSqlClusterMember is IAppAuthBasicManagement {
     }
 
     /// @notice Forwards to the parent cluster's `owner()`.
-    /// @dev Not part of `IAppAuth.sol` (which is intentionally agnostic about
-    ///      authorization patterns), but the Phala CLI's in-place CVM-update
-    ///      flow (`phala deploy --cvm-id …`) auto-registers devices by
-    ///      reading `owner()` on the CVM's `app_id` and signing the
-    ///      `addDevice` tx as that EOA. Without this passthrough the CLI
-    ///      reverts on `owner()` and refuses to ship sidecar image upgrades.
-    ///
-    ///      Returning the cluster's owner is the right answer: that's the
-    ///      EOA (or Safe) authorised to call `addDevice` / `addComposeHash`
-    ///      on the parent — exactly what the CLI then attempts to do.
-    function owner() external view returns (address) {
-        return IClusterReadOnly(cluster).owner();
+    /// @dev Phala CLI's in-place CVM-update flow (`phala deploy --cvm-id …`)
+    ///      auto-registers devices by reading `owner()` on the CVM's `app_id`
+    ///      and signing the `addDevice` tx as that EOA. Returning the cluster's
+    ///      owner is the right answer: that EOA (or Safe) is exactly the one
+    ///      authorized to call `addDevice` / `addComposeHash` on the parent.
+    function owner() external view override returns (address) {
+        return IAppAuthBasicManagement(cluster).owner();
+    }
+
+    /// @notice Forwards the cluster impl's `version()`. Operator-facing
+    ///         identity for "which logic is the proxy running?". Tracks the
+    ///         cluster impl across UUPS upgrades; the member itself is
+    ///         non-upgradeable, so this number changes only when the cluster
+    ///         is upgraded.
+    function version() external view override returns (uint256) {
+        return IAppAuthBasicManagement(cluster).version();
     }
 
     /// @notice Forward `allowedComposeHashes(hash)` to the parent cluster.
@@ -79,27 +74,31 @@ contract TeeSqlClusterMember is IAppAuthBasicManagement {
     ///      `mapping(bytes32 => bool) public allowedComposeHashes`. Our
     ///      cluster pattern keeps the storage on the parent so it's shared
     ///      across N member proxies; the member just forwards the read.
-    ///
-    ///      Pairs with the experiment in
-    ///      `dstackgres/docs/bug-reports/phala-cli-cvm-update-cluster-app-id.md`
-    ///      to test whether Failure 2 is satisfied by member-side getter
-    ///      passthroughs.
-    function allowedComposeHashes(bytes32 h) external view returns (bool) {
-        return IClusterReadOnly(cluster).allowedComposeHashes(h);
+    function allowedComposeHashes(bytes32 h) external view override returns (bool) {
+        return IAppAuthBasicManagement(cluster).allowedComposeHashes(h);
     }
 
     /// @notice Forward `allowedDeviceIds(deviceId)` to the parent cluster.
     /// @dev Same reasoning as `allowedComposeHashes` above.
-    function allowedDeviceIds(bytes32 d) external view returns (bool) {
-        return IClusterReadOnly(cluster).allowedDeviceIds(d);
+    function allowedDeviceIds(bytes32 d) external view override returns (bool) {
+        return IAppAuthBasicManagement(cluster).allowedDeviceIds(d);
     }
 
     /// @notice Forward `allowAnyDevice()` to the parent cluster.
     /// @dev DstackApp.sol exposes this as a flag that, when true, skips
     ///      the device-id allowlist check. Forwarding lets Phala's
     ///      pre-flight reach the same answer the boot path would.
-    function allowAnyDevice() external view returns (bool) {
-        return IClusterReadOnly(cluster).allowAnyDevice();
+    function allowAnyDevice() external view override returns (bool) {
+        return IAppAuthBasicManagement(cluster).allowAnyDevice();
+    }
+
+    /// @notice Forward `requireTcbUpToDate()` to the parent cluster.
+    /// @dev Currently informational on TeeSqlClusterApp — the cluster's
+    ///      `isAppAllowed` does not consult it. Operator tooling may still
+    ///      read it as a config policy. If the cluster ever begins enforcing
+    ///      TCB freshness at boot, this getter remains the canonical readback.
+    function requireTcbUpToDate() external view override returns (bool) {
+        return IAppAuthBasicManagement(cluster).requireTcbUpToDate();
     }
 
     error NotClusterOwner();
@@ -114,29 +113,45 @@ contract TeeSqlClusterMember is IAppAuthBasicManagement {
     ///      mutate the allowlist via this path is the cluster owner, the
     ///      same as a direct call to `cluster.addComposeHash(hash)`.
     function addComposeHash(bytes32 h) external override {
-        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).addComposeHash(h);
     }
 
     /// @notice Forward `removeComposeHash(hash)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
     function removeComposeHash(bytes32 h) external override {
-        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).removeComposeHash(h);
     }
 
     /// @notice Forward `addDevice(deviceId)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
     function addDevice(bytes32 d) external override {
-        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).addDevice(d);
     }
 
     /// @notice Forward `removeDevice(deviceId)` to the parent cluster.
     /// @dev Same gating as `addComposeHash`.
     function removeDevice(bytes32 d) external override {
-        if (msg.sender != IClusterReadOnly(cluster).owner()) revert NotClusterOwner();
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).removeDevice(d);
+    }
+
+    /// @notice Forward `setAllowAnyDevice(bool)` to the parent cluster.
+    /// @dev Same gating as `addComposeHash`. The cluster's `setAllowAnyDevice`
+    ///      accepts owner-or-passthrough, so the end-to-end authority is the
+    ///      cluster owner regardless of which path is taken.
+    function setAllowAnyDevice(bool v) external override {
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).setAllowAnyDevice(v);
+    }
+
+    /// @notice Forward `setRequireTcbUpToDate(bool)` to the parent cluster.
+    /// @dev Same gating as `addComposeHash`.
+    function setRequireTcbUpToDate(bool v) external override {
+        if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
+        IAppAuthBasicManagement(cluster).setRequireTcbUpToDate(v);
     }
 
     function supportsInterface(bytes4 id) external pure override returns (bool) {

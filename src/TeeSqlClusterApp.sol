@@ -122,6 +122,14 @@ contract TeeSqlClusterApp is
         uint256 nextMemberSeq;
         // Pause authority
         address pauser;
+        // TCB-freshness policy. Mirrors the dstack DstackApp setting; surfaced
+        // via `IAppAuthBasicManagement.requireTcbUpToDate()` for operator
+        // tooling and consulted at boot in `isAppAllowed`: when true, a CVM
+        // whose `AppBootInfo.tcbStatus` is anything other than `"UpToDate"`
+        // is rejected. Default false, so existing clusters continue to admit
+        // any TCB status until an operator explicitly opts in via
+        // `setRequireTcbUpToDate(true)`.
+        bool requireTcbUpToDate;
     }
 
     bytes32 public constant STORAGE_LOCATION =
@@ -138,10 +146,11 @@ contract TeeSqlClusterApp is
     //
     // Two independent counters live in this contract. Don't conflate them.
     //
-    //   `version()` (below) — implementation identity. Bump on every impl
-    //   upgrade so operators can tell at a glance which logic the proxy is
-    //   running. v1 is the first stable impl shipped under the
-    //   ERC-7201 + Ownable-only design; bump to "v2" the first time
+    //   `version()` (below) — implementation identity, returned as a
+    //   monotonically increasing `uint256`. Bump on every impl upgrade so
+    //   operators can tell at a glance which logic the proxy is running.
+    //   `1` is the first stable impl shipped under the ERC-7201 +
+    //   Ownable2Step design; bump to `2` the first time
     //   `upgradeToAndCall` lands a new impl.
     //
     //   `_REGISTER_MSG_PREFIX` / `_CALL_MSG_PREFIX` / `_WITNESS_MSG_PREFIX`
@@ -178,14 +187,14 @@ contract TeeSqlClusterApp is
     string private constant _WITNESS_MSG_PREFIX = "teesql-leader-offline:v1";
 
     /// @notice Implementation identity. Increments on every UUPS impl
-    ///         upgrade ("v1", "v2", "v3", …). Operator-facing: the answer
-    ///         to "which logic is this proxy running?" without
+    ///         upgrade (1, 2, 3, …). Operator-facing: the answer to
+    ///         "which logic is this proxy running?" without
     ///         eth_getStorageAt'ing the EIP-1967 implementation slot.
     /// @dev    Distinct from the internal signed-message format markers
     ///         (`_REGISTER_MSG_PREFIX` etc.) which only bump when the
     ///         message *shape* changes. See the version-markers block above.
-    function version() external pure returns (string memory) {
-        return "v1";
+    function version() external pure override returns (uint256) {
+        return 1;
     }
 
     // --- Events ---
@@ -203,7 +212,6 @@ contract TeeSqlClusterApp is
     event SignerAuthorized(address indexed signer, uint8 permissions);
     event SignerRevoked(address indexed signer);
     event KmsSet(address indexed kms);
-    event AllowAnyDeviceSet(bool value);
     event PauserSet(address indexed pauser);
 
     // --- Errors ---
@@ -362,6 +370,14 @@ contract TeeSqlClusterApp is
         if (!$.isOurPassthrough[b.appId]) return (false, "unknown passthrough");
         if (!$.allowedComposeHashes[b.composeHash]) return (false, "compose hash not allowed");
         if (!$.allowAnyDevice && !$.allowedDeviceIds[b.deviceId]) return (false, "device not allowed");
+        // Optional TCB-freshness gate. dstack populates `tcbStatus` from the
+        // KMS's policy decision over the boot quote; "UpToDate" is the
+        // canonical Intel TDX value for a TCB matching the latest published
+        // SVN. We compare bytes rather than recasting to a string-id enum so
+        // a future Intel string addition doesn't silently reclassify CVMs.
+        if ($.requireTcbUpToDate && keccak256(bytes(b.tcbStatus)) != keccak256(bytes("UpToDate"))) {
+            return (false, "tcb not up to date");
+        }
         return (true, "");
     }
 
@@ -599,9 +615,16 @@ contract TeeSqlClusterApp is
         emit DeviceRemoved(d);
     }
 
-    function setAllowAnyDevice(bool v) external onlyOwner {
+    function setAllowAnyDevice(bool v) external override {
+        _onlyOwnerOrPassthrough();
         _$().allowAnyDevice = v;
         emit AllowAnyDeviceSet(v);
+    }
+
+    function setRequireTcbUpToDate(bool v) external override {
+        _onlyOwnerOrPassthrough();
+        _$().requireTcbUpToDate = v;
+        emit RequireTcbUpToDateSet(v);
     }
 
     function addKmsRoot(address r) external onlyOwner {
@@ -663,16 +686,33 @@ contract TeeSqlClusterApp is
         return _$().clusterId;
     }
 
-    function allowedComposeHashes(bytes32 h) external view returns (bool) {
+    function allowedComposeHashes(bytes32 h) external view override returns (bool) {
         return _$().allowedComposeHashes[h];
     }
 
-    function allowedDeviceIds(bytes32 d) external view returns (bool) {
+    function allowedDeviceIds(bytes32 d) external view override returns (bool) {
         return _$().allowedDeviceIds[d];
     }
 
-    function allowAnyDevice() external view returns (bool) {
+    function allowAnyDevice() external view override returns (bool) {
         return _$().allowAnyDevice;
+    }
+
+    function requireTcbUpToDate() external view override returns (bool) {
+        return _$().requireTcbUpToDate;
+    }
+
+    /// @dev Disambiguates between `OwnableUpgradeable.owner()` and
+    ///      `IAppAuthBasicManagement.owner()` after the interface expansion
+    ///      added the read-side mirror. Same semantics as `OwnableUpgradeable`.
+    function owner()
+        public
+        view
+        virtual
+        override(OwnableUpgradeable, IAppAuthBasicManagement)
+        returns (address)
+    {
+        return super.owner();
     }
 
     function allowedKmsRoots(address r) external view override returns (bool) {

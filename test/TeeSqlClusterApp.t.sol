@@ -189,7 +189,7 @@ contract TeeSqlClusterAppTest is Test {
     function test_version() public view {
         // Bump in lockstep with every impl upgrade. CI test acts as a
         // forgotten-bump tripwire: change the impl, you must change this.
-        assertEq(app.version(), "v1");
+        assertEq(app.version(), uint256(1));
     }
 
     // --- ERC-7201 storage layout sanity ---
@@ -459,6 +459,93 @@ contract TeeSqlClusterAppTest is Test {
         (bool ok, string memory reason) = app.isAppAllowed(b);
         assertFalse(ok);
         assertEq(reason, "cluster paused");
+    }
+
+    // --- requireTcbUpToDate gate ---
+
+    function test_requireTcbUpToDateDefaultsFalseAndSkipsTcbCheck() public view {
+        // Default state: gate disabled, any tcbStatus accepted (matches v1
+        // behavior on already-deployed clusters that haven't opted in).
+        assertFalse(app.requireTcbUpToDate());
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthroughA, COMPOSE_HASH, DEVICE_ID);
+        b.tcbStatus = "OutOfDate";
+        (bool ok,) = app.isAppAllowed(b);
+        assertTrue(ok);
+    }
+
+    function test_requireTcbUpToDateAcceptsUpToDateBoot() public {
+        vm.prank(OWNER);
+        app.setRequireTcbUpToDate(true);
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthroughA, COMPOSE_HASH, DEVICE_ID);
+        b.tcbStatus = "UpToDate";
+        (bool ok, string memory reason) = app.isAppAllowed(b);
+        assertTrue(ok, reason);
+    }
+
+    function test_requireTcbUpToDateRejectsOutOfDateBoot() public {
+        vm.prank(OWNER);
+        app.setRequireTcbUpToDate(true);
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthroughA, COMPOSE_HASH, DEVICE_ID);
+        b.tcbStatus = "OutOfDate";
+        (bool ok, string memory reason) = app.isAppAllowed(b);
+        assertFalse(ok);
+        assertEq(reason, "tcb not up to date");
+    }
+
+    function test_requireTcbUpToDateRejectsEmptyTcbStatus() public {
+        vm.prank(OWNER);
+        app.setRequireTcbUpToDate(true);
+        // Empty string is the default in `_bootInfo`; gate must reject when
+        // the KMS hasn't populated tcbStatus rather than silently passing.
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthroughA, COMPOSE_HASH, DEVICE_ID);
+        (bool ok, string memory reason) = app.isAppAllowed(b);
+        assertFalse(ok);
+        assertEq(reason, "tcb not up to date");
+    }
+
+    function test_setRequireTcbUpToDateOnlyOwnerOrPassthrough() public {
+        vm.prank(ALICE);
+        vm.expectRevert(TeeSqlClusterApp.NotAuthorized.selector);
+        app.setRequireTcbUpToDate(true);
+
+        vm.prank(OWNER);
+        app.setRequireTcbUpToDate(true);
+        assertTrue(app.requireTcbUpToDate());
+
+        vm.prank(OWNER);
+        app.setRequireTcbUpToDate(false);
+        assertFalse(app.requireTcbUpToDate());
+    }
+
+    function test_passthroughForwardsSetRequireTcbUpToDate() public {
+        address passthrough = app.createMember(bytes32("p-tcb"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        // Non-owner caller is gated by the member's own check.
+        vm.prank(ALICE);
+        vm.expectRevert(TeeSqlClusterMember.NotClusterOwner.selector);
+        m.setRequireTcbUpToDate(true);
+
+        // Cluster owner calls through the member; the cluster's
+        // _onlyOwnerOrPassthrough accepts the registered passthrough.
+        vm.prank(OWNER);
+        m.setRequireTcbUpToDate(true);
+        assertTrue(app.requireTcbUpToDate());
+        assertTrue(m.requireTcbUpToDate());
+    }
+
+    function test_passthroughForwardsSetAllowAnyDevice() public {
+        address passthrough = app.createMember(bytes32("p-allowany"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        vm.prank(ALICE);
+        vm.expectRevert(TeeSqlClusterMember.NotClusterOwner.selector);
+        m.setAllowAnyDevice(true);
+
+        vm.prank(OWNER);
+        m.setAllowAnyDevice(true);
+        assertTrue(app.allowAnyDevice());
+        assertTrue(m.allowAnyDevice());
     }
 
     // --- claimLeader (first claim + self-reclaim) ---
