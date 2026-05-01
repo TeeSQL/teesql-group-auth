@@ -5,6 +5,16 @@ import {IAppAuth} from "./IAppAuth.sol";
 import {IAppAuthBasicManagement} from "./IAppAuthBasicManagement.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
+/// @dev Cluster-app-specific lifecycle surface that members forward.
+///      Lives in this file (not `IAppAuthBasicManagement`) because it's
+///      teesql-specific — the management interface stays mirror-compatible
+///      with dstack's reference DstackApp shape.
+interface ITeeSqlClusterAppLifecycle {
+    function destroyedAt() external view returns (uint256);
+    function destroyed() external view returns (bool);
+    function memberRetiredAt(bytes32 memberId) external view returns (uint256);
+}
+
 /// @title TeeSqlClusterMember
 /// @notice Per-CVM passthrough that forwards admin and boot-gate calls to a TeeSqlClusterApp.
 /// @dev No mutable storage, no admin, no upgrade path. Exists only to give each CVM a unique
@@ -152,6 +162,29 @@ contract TeeSqlClusterMember is IAppAuthBasicManagement {
     function setRequireTcbUpToDate(bool v) external override {
         if (msg.sender != IAppAuthBasicManagement(cluster).owner()) revert NotClusterOwner();
         IAppAuthBasicManagement(cluster).setRequireTcbUpToDate(v);
+    }
+
+    /// @notice Forward `destroyedAt()` to the parent cluster.
+    /// @dev Lifecycle is owned by the cluster contract; members are
+    ///      stateless. Operator tooling that holds a CVM's `app_id`
+    ///      (passthrough) can read this directly to detect a
+    ///      destroyed cluster without resolving the cluster address.
+    function destroyedAt() external view returns (uint256) {
+        return ITeeSqlClusterAppLifecycle(cluster).destroyedAt();
+    }
+
+    /// @notice Forward `destroyed()` to the parent cluster.
+    /// @dev Equivalent to `destroyedAt() != 0`. Two getters mirror
+    ///      the cluster's surface for callers that prefer a bool view.
+    function destroyed() external view returns (bool) {
+        return ITeeSqlClusterAppLifecycle(cluster).destroyed();
+    }
+
+    /// @notice Forward `memberRetiredAt(memberId)` to the parent cluster.
+    /// @dev `0` means active. Returned timestamp is `block.timestamp`
+    ///      at the moment of `retireMember(memberId)`.
+    function memberRetiredAt(bytes32 memberId) external view returns (uint256) {
+        return ITeeSqlClusterAppLifecycle(cluster).memberRetiredAt(memberId);
     }
 
     function supportsInterface(bytes4 id) external pure override returns (bool) {

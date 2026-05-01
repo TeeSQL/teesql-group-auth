@@ -42,6 +42,13 @@ contract TeeSqlClusterAppHarness is TeeSqlClusterApp {
     function __testSetPassthrough(address p, bool v) external {
         _$().isOurPassthrough[p] = v;
     }
+
+    /// @dev Mirrors the side-effect set of prod `register()` for the
+    ///      passthroughToMember mapping, so harness-seeded members
+    ///      can also be looked up via the new view in tests.
+    function __testSetPassthroughToMember(address p, bytes32 memberId) external {
+        _$().passthroughToMember[p] = memberId;
+    }
 }
 
 /// @dev Minimal mock of DstackKms exposing only what createMember needs.
@@ -189,7 +196,8 @@ contract TeeSqlClusterAppTest is Test {
     function test_version() public view {
         // Bump in lockstep with every impl upgrade. CI test acts as a
         // forgotten-bump tripwire: change the impl, you must change this.
-        assertEq(app.version(), uint256(1));
+        // v2 adds destroy() / retireMember() / passthroughToMember.
+        assertEq(app.version(), uint256(2));
     }
 
     // --- ERC-7201 storage layout sanity ---
@@ -986,6 +994,400 @@ contract TeeSqlClusterAppTest is Test {
 
         vm.prank(OWNER);
         app.upgradeToAndCall(address(v2), "");
+    }
+
+    // --- Lifecycle: destroy ---
+
+    function test_destroyOnlyOwner() public {
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(this)));
+        app.destroy();
+
+        // Pauser is a different role and must not be able to destroy.
+        vm.prank(PAUSER);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, PAUSER));
+        app.destroy();
+
+        vm.prank(OWNER);
+        vm.expectEmit(false, false, false, true, address(app));
+        emit TeeSqlClusterApp.ClusterDestroyed(block.timestamp);
+        app.destroy();
+        assertTrue(app.destroyed());
+        assertEq(app.destroyedAt(), block.timestamp);
+    }
+
+    function test_destroyIsIdempotentRevert() public {
+        vm.startPrank(OWNER);
+        app.destroy();
+        // Second call reverts; the flag is one-way.
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.destroy();
+        vm.stopPrank();
+    }
+
+    function test_isAppAllowedRejectsDestroyed() public {
+        address passthrough = app.createMember(bytes32("p-destroyed"));
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthrough, COMPOSE_HASH, DEVICE_ID);
+        // Pre-destroy: passes.
+        (bool ok,) = app.isAppAllowed(b);
+        assertTrue(ok);
+
+        vm.prank(OWNER);
+        app.destroy();
+
+        (bool ok2, string memory reason) = app.isAppAllowed(b);
+        assertFalse(ok2);
+        assertEq(reason, "cluster destroyed");
+    }
+
+    function test_isAppAllowedDestroyedReasonWinsOverPause() public {
+        address passthrough = app.createMember(bytes32("p-destroyed-paused"));
+        IAppAuth.AppBootInfo memory b = _bootInfo(passthrough, COMPOSE_HASH, DEVICE_ID);
+
+        vm.prank(PAUSER);
+        app.pause();
+        // Paused but not destroyed: pause wins.
+        (, string memory pausedReason) = app.isAppAllowed(b);
+        assertEq(pausedReason, "cluster paused");
+
+        // Owner can still unpause -> destroy. Order matters because
+        // `whenNotDestroyed` doesn't gate `unpause` (covered by the
+        // owner-housekeeping carve-out).
+        vm.startPrank(OWNER);
+        app.unpause();
+        app.destroy();
+        vm.stopPrank();
+
+        // Re-pause to confirm destroy wins regardless. Pauser is still
+        // the pauser EOA — but `whenNotDestroyed` gate is on `setPauser`,
+        // not `pause`, and `pause` itself isn't destroy-gated.
+        vm.prank(PAUSER);
+        app.pause();
+        (bool ok, string memory destroyedReason) = app.isAppAllowed(b);
+        assertFalse(ok);
+        assertEq(destroyedReason, "cluster destroyed", "destroy reason wins");
+    }
+
+    function test_destroyBlocksOwnerOrPassthroughMutators() public {
+        // Mint a passthrough so we have a non-owner authorized caller.
+        address passthrough = app.createMember(bytes32("p-destroy-mut"));
+
+        vm.prank(OWNER);
+        app.destroy();
+
+        bytes32 H = bytes32(uint256(0xC0DE99));
+        bytes32 D = bytes32(uint256(0xDEEF99));
+
+        // Owner gets the destroy revert before any other gate.
+        vm.startPrank(OWNER);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.addComposeHash(H);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.removeComposeHash(H);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.addDevice(D);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.removeDevice(D);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.setAllowAnyDevice(true);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.setRequireTcbUpToDate(true);
+        vm.stopPrank();
+
+        // Same calls from a registered passthrough also revert with
+        // ClusterDestroyed_ — the gate runs before the passthrough check.
+        vm.startPrank(passthrough);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.addComposeHash(H);
+        vm.stopPrank();
+    }
+
+    function test_destroyBlocksOwnerOnlyMutators() public {
+        vm.prank(OWNER);
+        app.destroy();
+
+        address kmsRootB = makeAddr("kmsRootB");
+        address newKms = makeAddr("newKms");
+        address newPauser = makeAddr("newPauser-d");
+
+        vm.startPrank(OWNER);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.addKmsRoot(kmsRootB);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.removeKmsRoot(kmsRootA);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.authorizeSigner(ALICE, 1);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.revokeSigner(ALICE);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.setKms(newKms);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.setPauser(newPauser);
+        vm.stopPrank();
+    }
+
+    function test_destroyBlocksCallAuthMutators() public {
+        // Pre-destroy: all four CallAuth mutators are reachable. We
+        // exercise updateEndpoint as the canary; _verifyCall is the
+        // shared chokepoint for claimLeader/updateEndpoint/
+        // updatePublicEndpoint/onboard, so gating via `whenNotDestroyed`
+        // on the mutator wraps the whole family.
+        bytes memory ep = hex"abcd";
+        TeeSqlClusterApp.CallAuth memory auth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updateEndpoint.selector, abi.encode(ep));
+
+        vm.prank(OWNER);
+        app.destroy();
+
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.updateEndpoint(auth, ep);
+
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
+        TeeSqlClusterApp.CallAuth memory clAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.claimLeader(clAuth, ep, witnesses);
+
+        bytes memory url = bytes("https://nope.example");
+        TeeSqlClusterApp.CallAuth memory upAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updatePublicEndpoint.selector, abi.encode(url));
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.updatePublicEndpoint(upAuth, url);
+
+        bytes memory payload = hex"01";
+        TeeSqlClusterApp.CallAuth memory obAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.onboard.selector, abi.encode(bMemberId, payload));
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.onboard(obAuth, bMemberId, payload);
+    }
+
+    function test_destroyAllowsOwnerHousekeeping() public {
+        vm.prank(OWNER);
+        app.destroy();
+
+        address newOwner = makeAddr("post-destroy-new-owner");
+
+        // transferOwnership / acceptOwnership remain callable.
+        vm.prank(OWNER);
+        app.transferOwnership(newOwner);
+        assertEq(app.pendingOwner(), newOwner);
+        vm.prank(newOwner);
+        app.acceptOwnership();
+        assertEq(app.owner(), newOwner);
+
+        // Pause / unpause stay reachable too — they're transient state
+        // and intentionally outside the destroy gate. (The spec calls
+        // out `unpause`; we exercise both for symmetry.)
+        vm.prank(PAUSER);
+        app.pause();
+        assertTrue(app.paused());
+        vm.prank(newOwner);
+        app.unpause();
+        assertFalse(app.paused());
+    }
+
+    function test_destroyKeepsReadsLive() public {
+        // Seed onboarding payload + claim leader pre-destroy so the
+        // post-destroy reads have something interesting to return.
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aabb");
+        bytes memory payload = hex"deadbeef";
+        TeeSqlClusterApp.CallAuth memory obAuth =
+            _makeCallAuth(aMemberId, aPk, 1, app.onboard.selector, abi.encode(bMemberId, payload));
+        app.onboard(obAuth, bMemberId, payload);
+
+        vm.prank(OWNER);
+        app.destroy();
+
+        // Forensic reads stay live post-destroy.
+        assertEq(app.clusterId(), "monitor");
+        assertTrue(app.allowedComposeHashes(COMPOSE_HASH));
+        assertTrue(app.allowedDeviceIds(DEVICE_ID));
+        assertEq(app.version(), uint256(2));
+        TeeSqlClusterApp.Member memory m = app.getMember(aMemberId);
+        assertEq(m.instanceId, aInstanceId);
+        TeeSqlClusterApp.Member memory leader = app.currentLeader();
+        assertEq(leader.instanceId, aInstanceId);
+        (bytes32 leaderId, uint256 epoch) = app.leaderLease();
+        assertEq(leaderId, aMemberId);
+        assertEq(epoch, uint256(1));
+        TeeSqlClusterApp.OnboardMsg[] memory onboarded = app.getOnboarding(bMemberId);
+        assertEq(onboarded.length, uint256(1));
+    }
+
+    // --- Lifecycle: retireMember ---
+
+    function test_retireOnlyOwner() public {
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(this)));
+        app.retireMember(aMemberId);
+
+        vm.prank(PAUSER);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, PAUSER));
+        app.retireMember(aMemberId);
+
+        vm.prank(OWNER);
+        vm.expectEmit(true, false, false, true, address(app));
+        emit TeeSqlClusterApp.MemberRetired(aMemberId, block.timestamp);
+        app.retireMember(aMemberId);
+        assertEq(app.memberRetiredAt(aMemberId), block.timestamp);
+    }
+
+    function test_retireRevertsForUnknownMember() public {
+        bytes32 ghost = keccak256("not-a-member");
+        vm.prank(OWNER);
+        vm.expectRevert(TeeSqlClusterApp.NotMember.selector);
+        app.retireMember(ghost);
+    }
+
+    function test_retireRevertsIfAlreadyRetired() public {
+        vm.startPrank(OWNER);
+        app.retireMember(aMemberId);
+        vm.expectRevert(TeeSqlClusterApp.AlreadyRetired.selector);
+        app.retireMember(aMemberId);
+        vm.stopPrank();
+    }
+
+    function test_retireRevertsForCurrentLeader() public {
+        _claimLeaderAs(aMemberId, aPk, 0, hex"aa");
+        vm.prank(OWNER);
+        vm.expectRevert(TeeSqlClusterApp.CannotRetireLeader.selector);
+        app.retireMember(aMemberId);
+
+        // After a successor takes over, the previous leader can be retired.
+        TeeSqlClusterApp.Witness[] memory ws = new TeeSqlClusterApp.Witness[](1);
+        ws[0] = _makeWitness(aMemberId, uint256(1), cMemberId, cPk);
+        bytes memory ep = hex"bb";
+        TeeSqlClusterApp.CallAuth memory bAuth =
+            _makeCallAuth(bMemberId, bPk, 0, app.claimLeader.selector, abi.encode(ep, ws));
+        app.claimLeader(bAuth, ep, ws);
+
+        vm.prank(OWNER);
+        app.retireMember(aMemberId);
+        assertGt(app.memberRetiredAt(aMemberId), uint256(0));
+    }
+
+    function test_retiredMemberMutatorsRevert() public {
+        vm.prank(OWNER);
+        app.retireMember(aMemberId);
+
+        // claimLeader from a retired member — even when the cluster is
+        // leader-less so witness checks don't fire. _verifyCall trips
+        // first.
+        bytes memory ep = hex"aa";
+        TeeSqlClusterApp.Witness[] memory witnesses = new TeeSqlClusterApp.Witness[](0);
+        TeeSqlClusterApp.CallAuth memory clAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.claimLeader.selector, abi.encode(ep, witnesses));
+        vm.expectRevert(TeeSqlClusterApp.MemberRetired_.selector);
+        app.claimLeader(clAuth, ep, witnesses);
+
+        TeeSqlClusterApp.CallAuth memory upAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updateEndpoint.selector, abi.encode(ep));
+        vm.expectRevert(TeeSqlClusterApp.MemberRetired_.selector);
+        app.updateEndpoint(upAuth, ep);
+
+        bytes memory url = bytes("https://retired.example");
+        TeeSqlClusterApp.CallAuth memory pubAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.updatePublicEndpoint.selector, abi.encode(url));
+        vm.expectRevert(TeeSqlClusterApp.MemberRetired_.selector);
+        app.updatePublicEndpoint(pubAuth, url);
+
+        bytes memory payload = hex"01";
+        TeeSqlClusterApp.CallAuth memory obAuth =
+            _makeCallAuth(aMemberId, aPk, 0, app.onboard.selector, abi.encode(bMemberId, payload));
+        vm.expectRevert(TeeSqlClusterApp.MemberRetired_.selector);
+        app.onboard(obAuth, bMemberId, payload);
+    }
+
+    function test_retiredMemberReadsStillWork() public {
+        vm.prank(OWNER);
+        app.retireMember(aMemberId);
+
+        // Member row remains readable; only the lifecycle flag changes.
+        TeeSqlClusterApp.Member memory m = app.getMember(aMemberId);
+        assertEq(m.instanceId, aInstanceId);
+        assertEq(m.passthrough, passthroughA);
+        assertGt(app.memberRetiredAt(aMemberId), uint256(0));
+        assertEq(app.memberRetiredAt(bMemberId), uint256(0));
+    }
+
+    function test_retireDoesNotAffectOtherMembers() public {
+        vm.prank(OWNER);
+        app.retireMember(aMemberId);
+
+        // B is unaffected — claimLeader, updateEndpoint, etc. all work.
+        _claimLeaderAs(bMemberId, bPk, 0, hex"bb");
+        (bytes32 leaderId,) = app.leaderLease();
+        assertEq(leaderId, bMemberId);
+
+        bytes memory ep = hex"cccc";
+        TeeSqlClusterApp.CallAuth memory upAuth =
+            _makeCallAuth(bMemberId, bPk, 1, app.updateEndpoint.selector, abi.encode(ep));
+        app.updateEndpoint(upAuth, ep);
+        TeeSqlClusterApp.Member memory bRow = app.getMember(bMemberId);
+        assertEq(bRow.endpoint, ep);
+    }
+
+    function test_destroyAndRetireCombined() public {
+        // Retire one member, destroy the cluster — both events should
+        // fire and both flags persist for forensic queries.
+        vm.startPrank(OWNER);
+        app.retireMember(aMemberId);
+        vm.expectEmit(false, false, false, true, address(app));
+        emit TeeSqlClusterApp.ClusterDestroyed(block.timestamp);
+        app.destroy();
+        vm.stopPrank();
+
+        assertGt(app.memberRetiredAt(aMemberId), uint256(0));
+        assertTrue(app.destroyed());
+        // Trying to retire another member after destroy must hit the
+        // destroy gate (whenNotDestroyed) before NotMember/AlreadyRetired.
+        vm.prank(OWNER);
+        vm.expectRevert(TeeSqlClusterApp.ClusterDestroyed_.selector);
+        app.retireMember(bMemberId);
+    }
+
+    // --- Lifecycle: passthroughToMember lookup ---
+
+    function test_passthroughToMemberLookup() public {
+        // Existing harness-seeded members have been written via
+        // __testSetMember which doesn't populate passthroughToMember
+        // (the prod write is in `register()`). Verify post-`register`
+        // population by minting a new passthrough and registering.
+        // The harness exposes a writer for that scenario directly:
+        // we backfill via __testSetMember + manual storage.
+        //
+        // For the canonical path, spin up a fresh cluster + use the
+        // sigchain mock — but that's the integration test's job.
+        // Here we exercise the view directly: zero before write, set
+        // after `register()`.
+        assertEq(app.passthroughToMember(passthroughA), bytes32(0));
+
+        // Use the harness to simulate a register() write:
+        // passthroughToMember is now part of the register() side-effect
+        // set, so the harness writer is updated to match.
+        app.__testSetPassthroughToMember(passthroughA, aMemberId);
+        assertEq(app.passthroughToMember(passthroughA), aMemberId);
+        assertEq(app.passthroughToMember(makeAddr("nobody")), bytes32(0));
+    }
+
+    // --- TeeSqlClusterMember view passthroughs ---
+
+    function test_memberDestroyViewPassthroughs() public {
+        address passthrough = app.createMember(bytes32("p-life"));
+        TeeSqlClusterMember m = TeeSqlClusterMember(passthrough);
+
+        assertFalse(m.destroyed());
+        assertEq(m.destroyedAt(), uint256(0));
+        assertEq(m.memberRetiredAt(aMemberId), uint256(0));
+
+        vm.startPrank(OWNER);
+        app.retireMember(aMemberId);
+        app.destroy();
+        vm.stopPrank();
+
+        assertTrue(m.destroyed());
+        assertEq(m.destroyedAt(), block.timestamp);
+        assertEq(m.memberRetiredAt(aMemberId), block.timestamp);
+        // Non-retired member still reads zero.
+        assertEq(m.memberRetiredAt(bMemberId), uint256(0));
     }
 
     // --- Helpers ---

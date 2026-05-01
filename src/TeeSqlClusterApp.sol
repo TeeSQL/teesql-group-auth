@@ -130,6 +130,24 @@ contract TeeSqlClusterApp is
         // any TCB status until an operator explicitly opts in via
         // `setRequireTcbUpToDate(true)`.
         bool requireTcbUpToDate;
+        // Cluster lifecycle. `destroyedAt != 0` is the irreversible
+        // "this proxy is forever stranded" signal. Once set, every mutator
+        // gated on `whenNotDestroyed` reverts; `isAppAllowed` returns
+        // `(false, "cluster destroyed")` for any boot quote; public reads
+        // stay live so forensic tooling can still walk the contract.
+        uint256 destroyedAt;
+        // Per-member lifecycle. `memberRetiredAt[id] != 0` removes the
+        // member from elections and gates its `_verifyCall`-using
+        // mutators (claimLeader / updateEndpoint / updatePublicEndpoint /
+        // onboard). The Member record itself stays in storage so
+        // historical queries continue to resolve.
+        mapping(bytes32 => uint256) memberRetiredAt;
+        // Direct passthrough -> memberId lookup. Populated alongside
+        // `instanceToMember` and `derivedToMember` in `register()`. Lets
+        // operator tooling (CLI `retire-member --passthrough …`) skip
+        // the `MemberRegistered` event scan and resolve memberId in a
+        // single SLOAD.
+        mapping(address => bytes32) passthroughToMember;
     }
 
     bytes32 public constant STORAGE_LOCATION =
@@ -150,8 +168,8 @@ contract TeeSqlClusterApp is
     //   monotonically increasing `uint256`. Bump on every impl upgrade so
     //   operators can tell at a glance which logic the proxy is running.
     //   `1` is the first stable impl shipped under the ERC-7201 +
-    //   Ownable2Step design; bump to `2` the first time
-    //   `upgradeToAndCall` lands a new impl.
+    //   Ownable2Step design; `2` adds the `destroy()` / `retireMember()`
+    //   lifecycle surface plus `passthroughToMember` lookup.
     //
     //   `_REGISTER_MSG_PREFIX` / `_CALL_MSG_PREFIX` / `_WITNESS_MSG_PREFIX`
     //   below — *signed-message format* identifiers. Each is a non-replay
@@ -194,7 +212,7 @@ contract TeeSqlClusterApp is
     ///         (`_REGISTER_MSG_PREFIX` etc.) which only bump when the
     ///         message *shape* changes. See the version-markers block above.
     function version() external pure override returns (uint256) {
-        return 1;
+        return 2;
     }
 
     // --- Events ---
@@ -214,6 +232,19 @@ contract TeeSqlClusterApp is
     event KmsSet(address indexed kms);
     event PauserSet(address indexed pauser);
 
+    /// @notice Emitted exactly once when the cluster transitions to the
+    ///         terminal `destroyed` state. Consumers (dns-controller,
+    ///         monitoring-hub) watch this signal to converge their views
+    ///         of the cluster to "gone forever" and stop reconciling
+    ///         records that pointed at it.
+    event ClusterDestroyed(uint256 timestamp);
+
+    /// @notice Emitted exactly once per member when retired. Member rows
+    ///         remain readable post-retire; the flag is what filters
+    ///         them out of election candidacy and gates their per-call-
+    ///         auth mutators.
+    event MemberRetired(bytes32 indexed memberId, uint256 timestamp);
+
     // --- Errors ---
     error WrongAppId();
     error InstanceBindingInvalid();
@@ -229,6 +260,16 @@ contract TeeSqlClusterApp is
     error ZeroAddress();
     error BadPerms();
     error NotAuthorized();
+    /// @dev Trailing underscore avoids identifier collision with the
+    ///      `ClusterDestroyed(uint256)` event on the same contract; a
+    ///      bare `revert ClusterDestroyed()` would be ambiguous to the
+    ///      compiler.
+    error ClusterDestroyed_();
+    /// @dev Same naming rule as `ClusterDestroyed_` — disambiguates from
+    ///      the `MemberRetired(bytes32,uint256)` event.
+    error MemberRetired_();
+    error AlreadyRetired();
+    error CannotRetireLeader();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -365,8 +406,14 @@ contract TeeSqlClusterApp is
 
     // --- IAppAuth (called by passthrough, which is called by DstackKms) ---
     function isAppAllowed(AppBootInfo calldata b) external view override returns (bool, string memory) {
-        if (paused()) return (false, "cluster paused");
         ClusterStorage storage $ = _$();
+        // Destroy gate runs first so the canonical "this proxy is
+        // forever stranded" reason wins over pause / passthrough /
+        // compose / device / TCB. Operators reading boot rejections
+        // should never have to guess whether a destroyed cluster was
+        // also paused or had a stale device id.
+        if ($.destroyedAt != 0) return (false, "cluster destroyed");
+        if (paused()) return (false, "cluster paused");
         if (!$.isOurPassthrough[b.appId]) return (false, "unknown passthrough");
         if (!$.allowedComposeHashes[b.composeHash]) return (false, "compose hash not allowed");
         if (!$.allowAnyDevice && !$.allowedDeviceIds[b.deviceId]) return (false, "device not allowed");
@@ -406,7 +453,7 @@ contract TeeSqlClusterApp is
         );
     }
 
-    function register(RegisterArgs calldata a) external whenNotPaused returns (bytes32 memberId) {
+    function register(RegisterArgs calldata a) external whenNotPaused whenNotDestroyed returns (bytes32 memberId) {
         ClusterStorage storage $ = _$();
         DstackSigChain.Proof memory proof = a.sigChainProof;
         (bytes32 codeId, bytes memory derivedPubkey) = DstackSigChain.verify(proof, this);
@@ -433,6 +480,12 @@ contract TeeSqlClusterApp is
         });
         $.instanceToMember[a.instanceId] = memberId;
         $.derivedToMember[derivedAddr] = memberId;
+        // Direct passthrough -> memberId. CLI's retire-member flow
+        // resolves memberId from the operator-supplied passthrough via
+        // a single SLOAD instead of a multi-block MemberRegistered
+        // event scan. Future boot-gate work that wants a per-member
+        // retired check inside `isAppAllowed` would also rely on this.
+        $.passthroughToMember[passthrough] = memberId;
         emit MemberRegistered(memberId, a.instanceId, passthrough, a.dnsLabel);
         emit InstanceBindingVerified(memberId, a.instanceId);
     }
@@ -455,6 +508,12 @@ contract TeeSqlClusterApp is
         ClusterStorage storage $ = _$();
         Member storage m = $.members[a.memberId];
         if (m.registeredAt == 0) revert NotMember();
+        // Retired members can no longer drive any per-call-auth mutator
+        // (claimLeader / updateEndpoint / updatePublicEndpoint / onboard).
+        // Boot-time `isAppAllowed` does NOT consult this — a retired CVM
+        // is presumed gone, and if it isn't, every state-changing path
+        // it can drive reverts here.
+        if ($.memberRetiredAt[a.memberId] != 0) revert MemberRetired_();
         if (a.nonce != $.memberNonce[a.memberId]) revert BadNonce();
 
         bytes32 h = callMessage(a.memberId, a.nonce, selector, args);
@@ -498,6 +557,7 @@ contract TeeSqlClusterApp is
     function claimLeader(CallAuth calldata auth, bytes calldata newEndpoint, Witness[] calldata witnesses)
         external
         whenNotPaused
+        whenNotDestroyed
     {
         bytes32 memberId = _verifyCall(auth, this.claimLeader.selector, abi.encode(newEndpoint, witnesses));
         ClusterStorage storage $ = _$();
@@ -534,14 +594,18 @@ contract TeeSqlClusterApp is
     /// @notice Update this member's encrypted tailnet endpoint without bumping the leader epoch.
     ///         Called by secondaries post-onboarding (once they have the cluster key) and on
     ///         tailnet-IP changes.
-    function updateEndpoint(CallAuth calldata auth, bytes calldata newEndpoint) external whenNotPaused {
+    function updateEndpoint(CallAuth calldata auth, bytes calldata newEndpoint) external whenNotPaused whenNotDestroyed {
         bytes32 memberId = _verifyCall(auth, this.updateEndpoint.selector, abi.encode(newEndpoint));
         _$().members[memberId].endpoint = newEndpoint;
         emit EndpointUpdated(memberId, newEndpoint);
     }
 
     /// @notice Update this member's customer-facing public URL.
-    function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint) external whenNotPaused {
+    function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint)
+        external
+        whenNotPaused
+        whenNotDestroyed
+    {
         bytes32 memberId = _verifyCall(auth, this.updatePublicEndpoint.selector, abi.encode(newPublicEndpoint));
         _$().members[memberId].publicEndpoint = newPublicEndpoint;
         emit PublicEndpointUpdated(memberId, newPublicEndpoint);
@@ -561,7 +625,11 @@ contract TeeSqlClusterApp is
 
     // --- Onboarding ---
 
-    function onboard(CallAuth calldata auth, bytes32 toId, bytes calldata payload) external whenNotPaused {
+    function onboard(CallAuth calldata auth, bytes32 toId, bytes calldata payload)
+        external
+        whenNotPaused
+        whenNotDestroyed
+    {
         bytes32 fromId = _verifyCall(auth, this.onboard.selector, abi.encode(toId, payload));
         ClusterStorage storage $ = _$();
         if ($.members[toId].registeredAt == 0) revert NotMember();
@@ -591,69 +659,81 @@ contract TeeSqlClusterApp is
         }
     }
 
-    function addComposeHash(bytes32 h) external override {
+    function addComposeHash(bytes32 h) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().allowedComposeHashes[h] = true;
         emit ComposeHashAdded(h);
     }
 
-    function removeComposeHash(bytes32 h) external override {
+    function removeComposeHash(bytes32 h) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().allowedComposeHashes[h] = false;
         emit ComposeHashRemoved(h);
     }
 
-    function addDevice(bytes32 d) external override {
+    function addDevice(bytes32 d) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().allowedDeviceIds[d] = true;
         emit DeviceAdded(d);
     }
 
-    function removeDevice(bytes32 d) external override {
+    function removeDevice(bytes32 d) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().allowedDeviceIds[d] = false;
         emit DeviceRemoved(d);
     }
 
-    function setAllowAnyDevice(bool v) external override {
+    function setAllowAnyDevice(bool v) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().allowAnyDevice = v;
         emit AllowAnyDeviceSet(v);
     }
 
-    function setRequireTcbUpToDate(bool v) external override {
+    function setRequireTcbUpToDate(bool v) external override whenNotDestroyed {
         _onlyOwnerOrPassthrough();
         _$().requireTcbUpToDate = v;
         emit RequireTcbUpToDateSet(v);
     }
 
-    function addKmsRoot(address r) external onlyOwner {
+    function addKmsRoot(address r) external onlyOwner whenNotDestroyed {
         if (r == address(0)) revert ZeroAddress();
         _$().allowedKmsRoots[r] = true;
         emit KmsRootAdded(r);
     }
 
-    function removeKmsRoot(address r) external onlyOwner {
+    function removeKmsRoot(address r) external onlyOwner whenNotDestroyed {
         _$().allowedKmsRoots[r] = false;
         emit KmsRootRemoved(r);
     }
 
-    function authorizeSigner(address s, uint8 p) external onlyOwner {
+    function authorizeSigner(address s, uint8 p) external onlyOwner whenNotDestroyed {
         if (s == address(0)) revert ZeroAddress();
         if (p == 0 || p > 3) revert BadPerms();
         _$().authorizedSigners[s] = AuthorizedSigner(p, true, block.timestamp);
         emit SignerAuthorized(s, p);
     }
 
-    function revokeSigner(address s) external onlyOwner {
+    function revokeSigner(address s) external onlyOwner whenNotDestroyed {
         _$().authorizedSigners[s].active = false;
         emit SignerRevoked(s);
     }
 
-    function setKms(address k) external onlyOwner {
+    function setKms(address k) external onlyOwner whenNotDestroyed {
         if (k == address(0)) revert ZeroAddress();
         _$().kms = k;
         emit KmsSet(k);
+    }
+
+    // --- Lifecycle modifier ---
+    /// @dev Reverts every gated mutator once `destroyedAt` is set.
+    ///      Owner housekeeping (`transferOwnership`, `acceptOwnership`,
+    ///      `unpause`) is intentionally NOT gated — destruction shouldn't
+    ///      lock the owner out of forensic admin. `pause`/`unpause` stay
+    ///      transient and are unaffected; `setPauser` is gated so a new
+    ///      pauser can't be installed on a stranded contract.
+    modifier whenNotDestroyed() {
+        if (_$().destroyedAt != 0) revert ClusterDestroyed_();
+        _;
     }
 
     // --- Pause ---
@@ -674,10 +754,47 @@ contract TeeSqlClusterApp is
         return _$().pauser;
     }
 
-    function setPauser(address p) external onlyOwner {
+    function setPauser(address p) external onlyOwner whenNotDestroyed {
         if (p == address(0)) revert ZeroAddress();
         _$().pauser = p;
         emit PauserSet(p);
+    }
+
+    // --- Lifecycle: destroy + retire ---
+
+    /// @notice Mark the cluster as permanently destroyed. Disables boot
+    ///         via `isAppAllowed`, reverts every gated mutator, leaves
+    ///         all reads live for forensics. One-way: there is no
+    ///         counterpart `undestroy()` and never will be — recovery
+    ///         means a fresh proxy.
+    /// @dev    Owner-only. Idempotent revert (`ClusterDestroyed_`) on
+    ///         second call. Emits `ClusterDestroyed(timestamp)` exactly
+    ///         once. `pause`/`unpause` and ownership transfer remain
+    ///         callable so the operator isn't locked out of housekeeping.
+    function destroy() external onlyOwner whenNotDestroyed {
+        ClusterStorage storage $ = _$();
+        $.destroyedAt = block.timestamp;
+        emit ClusterDestroyed(block.timestamp);
+    }
+
+    /// @notice Mark a member as permanently retired. Filters them out
+    ///         of backup-taker / auto-promote candidacy on the sidecar
+    ///         side and reverts every per-call-auth mutator they could
+    ///         drive. Reads (`getMember`, etc.) remain live so historical
+    ///         queries continue to resolve.
+    /// @dev    Owner-only and irreversible. The current leader cannot
+    ///         be retired in place — the operator must rotate to a new
+    ///         leader via `claimLeader` first. This preserves the
+    ///         witness-flow's ordering guarantees: the cluster is never
+    ///         observably leader-less in the same tx that retired the
+    ///         leader.
+    function retireMember(bytes32 memberId) external onlyOwner whenNotDestroyed {
+        ClusterStorage storage $ = _$();
+        if ($.members[memberId].registeredAt == 0) revert NotMember();
+        if ($.memberRetiredAt[memberId] != 0) revert AlreadyRetired();
+        if (memberId == $.leaderMemberId) revert CannotRetireLeader();
+        $.memberRetiredAt[memberId] = block.timestamp;
+        emit MemberRetired(memberId, block.timestamp);
     }
 
     // --- Views: explicit getters preserving prior auto-getter ABIs ---
@@ -755,6 +872,32 @@ contract TeeSqlClusterApp is
 
     function getMember(bytes32 id) external view returns (Member memory) {
         return _$().members[id];
+    }
+
+    /// @notice Block timestamp at which the cluster was destroyed; 0 if
+    ///         the cluster is still active.
+    function destroyedAt() external view returns (uint256) {
+        return _$().destroyedAt;
+    }
+
+    /// @notice Convenience boolean view; equivalent to `destroyedAt() != 0`.
+    function destroyed() external view returns (bool) {
+        return _$().destroyedAt != 0;
+    }
+
+    /// @notice Block timestamp at which `memberId` was retired; 0 if
+    ///         still active. Member rows themselves remain readable
+    ///         post-retire — this flag is the only state change.
+    function memberRetiredAt(bytes32 memberId) external view returns (uint256) {
+        return _$().memberRetiredAt[memberId];
+    }
+
+    /// @notice Direct passthrough -> memberId lookup. Returns
+    ///         `bytes32(0)` for an unregistered passthrough. Callers
+    ///         should treat zero as "no such member" rather than
+    ///         dispatch on it.
+    function passthroughToMember(address p) external view returns (bytes32) {
+        return _$().passthroughToMember[p];
     }
 
     function getOnboarding(bytes32 id) external view returns (OnboardMsg[] memory) {
