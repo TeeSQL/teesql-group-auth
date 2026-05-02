@@ -48,7 +48,14 @@ contract ClusterMemberFactory is Initializable, UUPSUpgradeable, IClusterMemberF
     /// future impl revisions override with `reinitializer(N)` and the
     /// appropriate migration logic, then ship via:
     ///   factory.upgradeToAndCall(newImpl, abi.encodeCall(reinitialize, (N, data)))
-    function reinitialize(uint64, /*version*/ bytes calldata /*data*/ ) public virtual {
+    function reinitialize(
+        uint64,
+        /*version*/
+        bytes calldata /*data*/
+    )
+        public
+        virtual
+    {
         revert NotImplemented();
     }
 

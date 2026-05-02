@@ -161,9 +161,7 @@ contract DiamondSmokeTest is Test {
         // the impl once, then wrap in ERC1967Proxy with initialize(deployer).
         ClusterMemberFactory factoryImpl = new ClusterMemberFactory();
         bytes memory factoryInit = abi.encodeCall(ClusterMemberFactory.initialize, (deployer));
-        factory = ClusterMemberFactory(
-            address(new ERC1967Proxy(address(factoryImpl), factoryInit))
-        );
+        factory = ClusterMemberFactory(address(new ERC1967Proxy(address(factoryImpl), factoryInit)));
 
         coreFacet = new CoreFacet();
         adminFacet = new AdminFacet();
