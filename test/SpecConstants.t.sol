@@ -11,6 +11,7 @@ import {AttestationDstackStorage} from "../src/storage/AttestationDstackStorage.
 import {KmsDstackStorage} from "../src/storage/KmsDstackStorage.sol";
 import {MemberStorage} from "../src/storage/MemberStorage.sol";
 import {FactoryStorage} from "../src/storage/FactoryStorage.sol";
+import {ClusterFactoryStorage} from "../src/storage/ClusterFactoryStorage.sol";
 import {DstackAttestationAdapterFacet} from "../src/facets/dstack/DstackAttestationAdapterFacet.sol";
 import {DstackKmsAdapterFacet} from "../src/facets/dstack/DstackKmsAdapterFacet.sol";
 
@@ -98,9 +99,9 @@ contract SpecConstantsTest is Test {
     ///         the cross-checks above by extracting zero rows.
     function test_parsedExpectedRowCounts() public view {
         assertEq(_count19_1, 2, "expected 2 rows in spec 19.1 (adapter ids)");
-        assertEq(_count19_2, 8, "expected 8 rows in spec 19.2 (storage slots)");
-        assertEq(_count, 10, "expected 10 total parsed rows");
-        assertEq(_sourceCount, 10, "expected 10 source constants registered");
+        assertEq(_count19_2, 9, "expected 9 rows in spec 19.2 (storage slots)");
+        assertEq(_count, 11, "expected 11 total parsed rows");
+        assertEq(_sourceCount, 11, "expected 11 source constants registered");
     }
 
     // ─── Source table ──────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ contract SpecConstantsTest is Test {
         _addSource("teesql.storage.Kms.Dstack", KmsDstackStorage.SLOT);
         _addSource("teesql.storage.Member", MemberStorage.SLOT);
         _addSource("teesql.storage.Factory", FactoryStorage.SLOT);
+        _addSource("teesql.storage.ClusterFactory", ClusterFactoryStorage.SLOT);
     }
 
     function _addSource(string memory name, bytes32 value) internal {

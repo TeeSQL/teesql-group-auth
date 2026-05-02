@@ -12,6 +12,12 @@ library FactoryStorage {
         address pendingAdmin; // Ownable2Step
         mapping(bytes32 => address) memberImpl; // attestationId → impl
         bytes32[] registeredAttestationIds; // for enumeration
+        // Per-member provenance map. Set in deployMember(); never cleared.
+        // Webhook + hub fleet enumeration consume this via isDeployedMember.
+        // Append-only ERC-7201 layout extension; safe vs prior on-chain
+        // factory state (this is a fresh factory deploy, not an in-place
+        // upgrade — see spec §3.2).
+        mapping(address => bool) deployedMembers;
     }
 
     bytes32 internal constant SLOT =

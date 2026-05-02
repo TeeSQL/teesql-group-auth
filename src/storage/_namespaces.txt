@@ -6,3 +6,4 @@ teesql.storage.Attestation.Dstack
 teesql.storage.Kms.Dstack
 teesql.storage.Member
 teesql.storage.Factory
+teesql.storage.ClusterFactory

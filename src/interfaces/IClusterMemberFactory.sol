@@ -29,6 +29,10 @@ interface IClusterMemberFactory {
     function admin() external view returns (address);
     function pendingAdmin() external view returns (address);
     function registeredAttestationIds() external view returns (bytes32[] memory);
+    /// True iff `proxy` was minted by this factory's `deployMember`. False
+    /// for externally-deployed proxies at the same address. Webhook +
+    /// hub fleet enumeration consume this.
+    function isDeployedMember(address proxy) external view returns (bool);
 
     // Per-runtime impl management
     function setMemberImpl(bytes32 attestationId, address newImpl) external;

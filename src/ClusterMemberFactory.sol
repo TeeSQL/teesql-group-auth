@@ -113,7 +113,16 @@ contract ClusterMemberFactory is IClusterMemberFactory {
             (cluster)
         );
         proxy = address(new ERC1967Proxy{salt: effectiveSalt}(impl, initCalldata));
+        FactoryStorage.layout().deployedMembers[proxy] = true;
         emit MemberDeployed(cluster, salt, attestationId, proxy, impl);
+    }
+
+    /// Webhook + hub fleet enumeration consume this. Returns true iff
+    /// `proxy` was minted by this factory's `deployMember` path. False
+    /// for any externally-deployed proxy at the same address (defends
+    /// against a rogue contract claiming to be one of our members).
+    function isDeployedMember(address proxy) external view returns (bool) {
+        return FactoryStorage.layout().deployedMembers[proxy];
     }
 
     /// Predict the address `deployMember(cluster, salt, attestationId)`
