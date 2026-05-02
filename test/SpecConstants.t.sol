@@ -53,7 +53,20 @@ contract SpecConstantsTest is Test {
 
     function setUp() public {
         _populateSourceTable();
-        _parseSpecTables();
+        // On standalone teesql-group-auth checkouts (e.g. github.com CI on
+        // this repo), the parent dstackgres spec file at
+        // `../../docs/specs/...` doesn't exist — the spec lives in a
+        // sibling repo, not the submodule. Skip the spec-source loop in
+        // that case; the loop is still enforced when forge test is run
+        // from a dstackgres checkout (where the submodule is mounted at
+        // `open-source/teesql-group-auth/`, putting the spec exactly two
+        // dirs up). Use try/catch over `vm.readFile` because Foundry's
+        // missing-file error is delivered as a revert, not a return code.
+        try vm.readFile(SPEC_PATH) returns (string memory) {
+            _parseSpecTables();
+        } catch {
+            vm.skip(true);
+        }
     }
 
     // ─── Tests ─────────────────────────────────────────────────────────────
