@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
 
 import {IClusterDiamondFactory} from "./interfaces/IClusterDiamondFactory.sol";
@@ -8,13 +11,19 @@ import {ClusterDiamond} from "./diamond/ClusterDiamond.sol";
 import {ClusterFactoryStorage} from "./storage/ClusterFactoryStorage.sol";
 
 /// @title ClusterDiamondFactory
-/// @notice Chain-singleton factory that deploys `ClusterDiamond` proxies
-///         and records each one in a permanent provenance map. Webhook
-///         (`isDeployedCluster`) + hub fleet enumeration (`listClusters`)
-///         consume this map.
-/// @dev    Spec: `cluster-diamond-factory-and-member-provenance.md`. Admin
-///         (`Ownable2Step`) starts as the deployer EOA at chain-bootstrap
-///         time and can be transferred to a Safe via
+/// @notice UUPS chain-singleton factory that deploys `ClusterDiamond`
+///         proxies and records each one in a permanent provenance map.
+///         Webhook (`isDeployedCluster`) + hub fleet enumeration
+///         (`listClusters`) consume this map.
+/// @dev    Spec: `cluster-diamond-factory-and-member-provenance.md` §3.0,
+///         §3.1. Operators only ever interact with the proxy address;
+///         the impl is rotated in place via `upgradeToAndCall(newImpl,
+///         "")` from the factory admin. UUPS keeps the proxy address
+///         stable across factory logic revisions so the webhook env
+///         pin (`CANONICAL_CLUSTER_FACTORY`) never changes.
+///
+///         Admin (`Ownable2Step`) starts as the deployer EOA at
+///         chain-bootstrap time and can be transferred to a Safe via
 ///         `transferAdmin` / `acceptAdmin` when the operator is ready.
 ///         `deployCluster` is `onlyAdmin` to close the registry-spam
 ///         attack — a permissionless `deployCluster` would let any
@@ -22,11 +31,34 @@ import {ClusterFactoryStorage} from "./storage/ClusterFactoryStorage.sol";
 ///         controlled stranded diamonds for ~$300 of gas, breaking hub
 ///         fleet enumeration and forcing the webhook to lean entirely
 ///         on the defense-in-depth `cluster.isOurPassthrough` check.
-contract ClusterDiamondFactory is IClusterDiamondFactory {
-    constructor(address _admin) {
+contract ClusterDiamondFactory is Initializable, UUPSUpgradeable, IClusterDiamondFactory {
+    error NotImplemented();
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// One-shot initializer invoked by `ERC1967Proxy`'s constructor at
+    /// chain-bootstrap time. Replaces the prior direct constructor.
+    function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroAddress();
         ClusterFactoryStorage.layout().admin = _admin;
     }
+
+    /// Reinitializer placeholder per repo UUPS convention
+    /// (memory: feedback_uups_reinitializer_convention). v1 reverts;
+    /// future impl revisions override with `reinitializer(N)` and the
+    /// appropriate migration logic, then ship via:
+    ///   factory.upgradeToAndCall(newImpl, abi.encodeCall(reinitialize, (N, data)))
+    function reinitialize(uint64, /*version*/ bytes calldata /*data*/ ) public virtual {
+        revert NotImplemented();
+    }
+
+    /// UUPS upgrade gate. Same `onlyAdmin` authority as `deployCluster`
+    /// / `transferAdmin`. Admin starts as deployer EOA, transfers to a
+    /// Safe via `transferAdmin` / `acceptAdmin`.
+    function _authorizeUpgrade(address) internal view override onlyAdmin {}
 
     modifier onlyAdmin() {
         if (msg.sender != ClusterFactoryStorage.layout().admin) revert NotAdmin();

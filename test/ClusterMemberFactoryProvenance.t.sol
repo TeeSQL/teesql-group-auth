@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {DiamondSmokeTest} from "../test/DiamondSmoke.t.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 import {ClusterMemberFactory} from "src/ClusterMemberFactory.sol";
 import {IClusterMemberFactory, IMemberInit} from "src/interfaces/IClusterMemberFactory.sol";
@@ -260,5 +261,106 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
         assertTrue(factory.isDeployedMember(p1), "p1 true");
         assertTrue(factory.isDeployedMember(p2), "p2 true");
         assertTrue(factory.isDeployedMember(p3), "p3 true");
+    }
+
+    // ── UUPS upgradeability (spec §3.4) ────────────────────────────────────
+    //
+    // Member factory is now a UUPS proxy (spec §3.0 supersedes parent §8 Q9).
+    // The DiamondSmoke parent setUp deploys the factory as
+    // `ERC1967Proxy(impl, encodeCall(initialize, (deployer)))` so `factory`
+    // is the proxy address; admin is `deployer` (the test contract).
+
+    function test_initialize_revertsOnSecondCall() public {
+        // Already initialized by DiamondSmokeTest.setUp.
+        vm.expectRevert(bytes4(0xf92ee8a9)); // OZ InvalidInitialization
+        factory.initialize(address(0xBEEF));
+    }
+
+    function test_initialize_revertsOnZeroAdmin() public {
+        ClusterMemberFactory impl = new ClusterMemberFactory();
+        bytes memory initData = abi.encodeCall(ClusterMemberFactory.initialize, (address(0)));
+        vm.expectRevert(IClusterMemberFactory.ZeroAddress.selector);
+        new ERC1967Proxy(address(impl), initData);
+    }
+
+    function test_impl_constructor_disablesInitializers() public {
+        ClusterMemberFactory impl = new ClusterMemberFactory();
+        vm.expectRevert(bytes4(0xf92ee8a9));
+        impl.initialize(address(0xBEEF));
+    }
+
+    function test_upgrade_revertsForNonAdmin() public {
+        ClusterMemberFactory newImpl = new ClusterMemberFactory();
+        vm.prank(address(0xDEAD));
+        vm.expectRevert(IClusterMemberFactory.NotAdmin.selector);
+        UUPSUpgradeable(address(factory)).upgradeToAndCall(address(newImpl), "");
+    }
+
+    function test_upgrade_succeedsForAdmin_andPreservesState() public {
+        _registerDstackImpl();
+        address p = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(1)), DSTACK_ATTESTATION_ID);
+
+        ClusterMemberFactory newImpl = new ClusterMemberFactory();
+        UUPSUpgradeable(address(factory)).upgradeToAndCall(address(newImpl), "");
+
+        // EIP-1967 implementation slot rotated.
+        bytes32 implSlot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+        bytes32 storedImpl = vm.load(address(factory), implSlot);
+        assertEq(address(uint160(uint256(storedImpl))), address(newImpl), "impl slot rotated");
+
+        // Prior state preserved.
+        assertEq(factory.admin(), deployer, "admin");
+        assertEq(factory.memberImpl(DSTACK_ATTESTATION_ID), address(dstackMemberImpl), "memberImpl preserved");
+        assertTrue(factory.isDeployedMember(p), "deployedMembers preserved");
+        bytes32[] memory ids = factory.registeredAttestationIds();
+        assertEq(ids.length, 1, "registered runtime preserved");
+        assertEq(ids[0], DSTACK_ATTESTATION_ID, "runtime id preserved");
+    }
+
+    function test_upgrade_succeedsForRotatedAdmin() public {
+        address newAdmin = address(0xABCD);
+        factory.transferAdmin(newAdmin);
+        vm.prank(newAdmin);
+        factory.acceptAdmin();
+
+        ClusterMemberFactory newImpl = new ClusterMemberFactory();
+        // Old admin (deployer) loses authority.
+        vm.expectRevert(IClusterMemberFactory.NotAdmin.selector);
+        UUPSUpgradeable(address(factory)).upgradeToAndCall(address(newImpl), "");
+
+        // New admin succeeds.
+        vm.prank(newAdmin);
+        UUPSUpgradeable(address(factory)).upgradeToAndCall(address(newImpl), "");
+    }
+
+    function test_reinitialize_placeholderReverts() public {
+        vm.expectRevert(ClusterMemberFactory.NotImplemented.selector);
+        factory.reinitialize(2, "");
+
+        vm.expectRevert(ClusterMemberFactory.NotImplemented.selector);
+        factory.reinitialize(99, hex"deadbeef");
+    }
+
+    function test_upgrade_thenDeployMember_works() public {
+        _registerDstackImpl();
+        UUPSUpgradeable(address(factory)).upgradeToAndCall(address(new ClusterMemberFactory()), "");
+
+        // Post-upgrade deploy still works; provenance bit still set.
+        address p = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(1)), DSTACK_ATTESTATION_ID);
+        assertTrue(factory.isDeployedMember(p), "post-upgrade deploy registered");
+    }
+
+    /// EIP-1967 impl slot and ERC-7201 Factory slot must coexist.
+    function test_proxy_storage_doesNotOverlap_eip1967_with_erc7201() public view {
+        bytes32 erc7201Slot = 0xc7ca5b180fe1e18defad477f0b08739bf72851d8efc9aa269b38f4d8139d4e00;
+        bytes32 eip1967Slot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+        assertTrue(erc7201Slot != eip1967Slot, "slots must be distinct");
+
+        bytes32 implWord = vm.load(address(factory), eip1967Slot);
+        assertTrue(implWord != bytes32(0), "EIP-1967 impl set by ERC1967Proxy ctor");
+
+        // First slot of FactoryStorage.Layout is `admin`; initialize set it.
+        bytes32 adminWord = vm.load(address(factory), erc7201Slot);
+        assertEq(address(uint160(uint256(adminWord))), deployer, "ERC-7201 admin slot populated");
     }
 }

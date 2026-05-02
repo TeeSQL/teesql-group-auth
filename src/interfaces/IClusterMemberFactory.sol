@@ -20,6 +20,14 @@ interface IClusterMemberFactory {
     error ImplDriftDetected();
     error NotPendingAdmin();
 
+    // UUPS lifecycle. Constructor is empty (only `_disableInitializers`);
+    // proxy calls `initialize` once at chain-bootstrap. `reinitialize` is
+    // a placeholder per the repo UUPS convention — v1 reverts; future
+    // impl revisions override with `reinitializer(N)` and migration
+    // logic, then ship via `upgradeToAndCall(newImpl, encodeCall(reinitialize, (N, data)))`.
+    function initialize(address admin) external;
+    function reinitialize(uint64 version, bytes calldata data) external;
+
     // Reads
     function memberImpl(bytes32 attestationId) external view returns (address);
     function admin() external view returns (address);

@@ -1,30 +1,61 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 import {IClusterMemberFactory, IMemberInit} from "./interfaces/IClusterMemberFactory.sol";
 import {FactoryStorage} from "./storage/FactoryStorage.sol";
 
 /// @title ClusterMemberFactory
-/// @notice Chain-singleton factory that deploys `ERC1967Proxy` Member
-///         instances bound to a per-cluster diamond. Per-runtime impl
-///         selection: the factory keeps a `attestationId → impl` mapping;
-///         each `deployMember` call selects the impl matching the cluster's
-///         attestation runtime. Storage lives in the
-///         `teesql.storage.Factory` ERC-7201 namespace shared with every
-///         future revision of this contract.
-/// @dev    Spec: `cluster-v4-diamond-and-member-uups.md` §8. Admin authority
-///         is `Ownable2Step` (transferAdmin / acceptAdmin) and is
-///         intentionally distinct from any cluster's owner — the same Safe
-///         can hold both, but separating the roles documents the trust
-///         boundary (admin can rotate a per-runtime Member impl across
-///         every cluster that uses that runtime).
-contract ClusterMemberFactory is IClusterMemberFactory {
-    constructor(address _admin) {
+/// @notice UUPS chain-singleton factory that deploys `ERC1967Proxy`
+///         Member instances bound to a per-cluster diamond. Per-runtime
+///         impl selection: the factory keeps a `attestationId → impl`
+///         mapping; each `deployMember` call selects the impl matching
+///         the cluster's attestation runtime. Storage lives in the
+///         `teesql.storage.Factory` ERC-7201 namespace shared with
+///         every future revision of this contract.
+/// @dev    Spec: `cluster-v4-diamond-and-member-uups.md` §8 +
+///         `cluster-diamond-factory-and-member-provenance.md` §3.0,
+///         §3.2. UUPS rework supersedes parent §8 Q9 (which framed this
+///         factory as non-upgradeable); the webhook trust pin
+///         (`CANONICAL_MEMBER_FACTORY` env) requires a stable proxy
+///         address across factory bytecode revisions.
+///
+///         Admin (`Ownable2Step`) is intentionally distinct from any
+///         cluster's owner — the same Safe can hold both, but
+///         separating the roles documents the trust boundary (admin
+///         can rotate a per-runtime Member impl across every cluster
+///         that uses that runtime).
+contract ClusterMemberFactory is Initializable, UUPSUpgradeable, IClusterMemberFactory {
+    error NotImplemented();
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// One-shot initializer invoked by `ERC1967Proxy`'s constructor at
+    /// chain-bootstrap time. Replaces the prior direct constructor.
+    function initialize(address _admin) external initializer {
         if (_admin == address(0)) revert ZeroAddress();
         FactoryStorage.layout().admin = _admin;
     }
+
+    /// Reinitializer placeholder per repo UUPS convention
+    /// (memory: feedback_uups_reinitializer_convention). v1 reverts;
+    /// future impl revisions override with `reinitializer(N)` and the
+    /// appropriate migration logic, then ship via:
+    ///   factory.upgradeToAndCall(newImpl, abi.encodeCall(reinitialize, (N, data)))
+    function reinitialize(uint64, /*version*/ bytes calldata /*data*/ ) public virtual {
+        revert NotImplemented();
+    }
+
+    /// UUPS upgrade gate. Same `onlyAdmin` authority as `setMemberImpl`
+    /// / `transferAdmin`. Admin starts as deployer EOA, transfers to a
+    /// Safe via `transferAdmin` / `acceptAdmin`.
+    function _authorizeUpgrade(address) internal view override onlyAdmin {}
 
     modifier onlyAdmin() {
         if (msg.sender != FactoryStorage.layout().admin) revert NotAdmin();

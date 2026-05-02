@@ -3,6 +3,9 @@ pragma solidity ^0.8.24;
 
 import {Vm} from "forge-std/Vm.sol";
 
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+
 import {DiamondSmokeTest, IClusterView} from "../test/DiamondSmoke.t.sol";
 
 import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
@@ -55,9 +58,17 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
     /// invoke without bookkeeping.
     function _freshFactory() internal returns (ClusterDiamondFactory) {
         if (address(clusterFactory) == address(0)) {
-            clusterFactory = new ClusterDiamondFactory(deployer);
+            clusterFactory = _deployClusterFactoryProxy(deployer);
         }
         return clusterFactory;
+    }
+
+    /// Deploy a fresh ClusterDiamondFactory as ERC1967Proxy + initialize.
+    /// Mirrors the production chain-bootstrap pattern (spec §3.0).
+    function _deployClusterFactoryProxy(address admin_) internal returns (ClusterDiamondFactory) {
+        ClusterDiamondFactory impl = new ClusterDiamondFactory();
+        bytes memory initData = abi.encodeCall(ClusterDiamondFactory.initialize, (admin_));
+        return ClusterDiamondFactory(address(new ERC1967Proxy(address(impl), initData)));
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -316,19 +327,37 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         f.acceptAdmin();
     }
 
-    // ── Constructor ────────────────────────────────────────────────────────
+    // ── Initializer (replaces prior constructor-arg shape) ─────────────────
 
-    function test_constructor_revertsOnZeroAdmin() public {
+    function test_initialize_revertsOnZeroAdmin() public {
+        ClusterDiamondFactory impl = new ClusterDiamondFactory();
+        bytes memory initData = abi.encodeCall(ClusterDiamondFactory.initialize, (address(0)));
         vm.expectRevert(IClusterDiamondFactory.ZeroAddress.selector);
-        new ClusterDiamondFactory(address(0));
+        new ERC1967Proxy(address(impl), initData);
     }
 
-    function test_constructor_setsAdminCorrectly() public {
-        ClusterDiamondFactory fnew = new ClusterDiamondFactory(stranger);
-        assertEq(fnew.admin(), stranger, "admin set from ctor arg");
+    function test_initialize_setsAdminCorrectly() public {
+        ClusterDiamondFactory fnew = _deployClusterFactoryProxy(stranger);
+        assertEq(fnew.admin(), stranger, "admin set from initialize arg");
         assertEq(fnew.pendingAdmin(), address(0), "pending starts zero");
         assertEq(fnew.clusterCount(), 0, "count starts zero");
         assertEq(fnew.listClusters().length, 0, "list starts empty");
+    }
+
+    function test_initialize_revertsOnSecondCall() public {
+        ClusterDiamondFactory f = _freshFactory();
+        // OZ Initializable revert: bytes4(keccak256("InvalidInitialization()"))
+        vm.expectRevert(bytes4(0xf92ee8a9));
+        f.initialize(stranger);
+    }
+
+    function test_impl_constructor_disablesInitializers() public {
+        ClusterDiamondFactory impl = new ClusterDiamondFactory();
+        // Calling initialize directly on the impl (not through the proxy)
+        // must revert — _disableInitializers() in the constructor closed
+        // the gate.
+        vm.expectRevert(bytes4(0xf92ee8a9));
+        impl.initialize(stranger);
     }
 
     // ── Functional happy paths ─────────────────────────────────────────────
@@ -505,5 +534,120 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         assertEq(IERC173(d).owner(), deployer, "DiamondInit overwrote OwnableStorage.owner = args.owner");
         assertEq(IClusterView(d).clusterId(), "test-cluster-via-factory", "DiamondInit set clusterId");
         assertEq(IClusterView(d).factory(), address(factory), "DiamondInit set factory pointer");
+    }
+
+    // ── UUPS upgradeability (spec §3.4) ────────────────────────────────────
+
+    /// `_authorizeUpgrade` is `onlyAdmin` — random EOAs cannot rotate
+    /// the factory impl.
+    function test_upgrade_revertsForNonAdmin() public {
+        ClusterDiamondFactory f = _freshFactory();
+        ClusterDiamondFactory newImpl = new ClusterDiamondFactory();
+        vm.prank(stranger);
+        vm.expectRevert(IClusterDiamondFactory.NotAdmin.selector);
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(newImpl), "");
+    }
+
+    /// Admin can land an impl rotation; the EIP-1967 implementation slot
+    /// flips and prior state is preserved (admin, registered clusters,
+    /// provenance map all intact post-upgrade).
+    function test_upgrade_succeedsForAdmin() public {
+        ClusterDiamondFactory f = _freshFactory();
+        address d = _deployClusterViaFactory(bytes32(0));
+        ClusterDiamondFactory newImpl = new ClusterDiamondFactory();
+
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(newImpl), "");
+
+        // EIP-1967 implementation slot now holds newImpl's address.
+        bytes32 implSlot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+        bytes32 storedImpl = vm.load(address(f), implSlot);
+        assertEq(address(uint160(uint256(storedImpl))), address(newImpl), "impl slot rotated");
+
+        // Prior state preserved.
+        assertEq(f.admin(), deployer, "admin unchanged");
+        assertEq(f.clusterCount(), 1, "registered cluster preserved");
+        assertTrue(f.isDeployedCluster(d), "provenance map preserved");
+    }
+
+    /// After `transferAdmin → acceptAdmin`, the new admin can land an
+    /// upgrade and the old admin loses authority.
+    function test_upgrade_succeedsForRotatedAdmin() public {
+        ClusterDiamondFactory f = _freshFactory();
+        f.transferAdmin(newAdmin);
+        vm.prank(newAdmin);
+        f.acceptAdmin();
+
+        ClusterDiamondFactory newImpl = new ClusterDiamondFactory();
+        // Old admin is now a stranger.
+        vm.expectRevert(IClusterDiamondFactory.NotAdmin.selector);
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(newImpl), "");
+
+        // New admin succeeds.
+        vm.prank(newAdmin);
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(newImpl), "");
+    }
+
+    /// v1's `reinitialize(N, data)` reverts for any N. Lock-in for the
+    /// repo UUPS convention — future impl revisions override and ship a
+    /// sibling test that exercises the override.
+    function test_reinitialize_placeholderReverts() public {
+        ClusterDiamondFactory f = _freshFactory();
+        vm.expectRevert(ClusterDiamondFactory.NotImplemented.selector);
+        f.reinitialize(2, "");
+
+        vm.expectRevert(ClusterDiamondFactory.NotImplemented.selector);
+        f.reinitialize(99, hex"deadbeef");
+    }
+
+    /// State-preservation invariant: deploy clusters A and B, upgrade
+    /// impl, assert `listClusters() == [A, B]`, every provenance read
+    /// still resolves, `admin()` unchanged.
+    function test_state_preservation_acrossUpgrade() public {
+        ClusterDiamondFactory f = _freshFactory();
+        address a = _deployClusterViaFactory(bytes32(0));
+        address b = _deployClusterViaFactory(bytes32(0));
+
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(new ClusterDiamondFactory()), "");
+
+        assertEq(f.admin(), deployer, "admin");
+        assertEq(f.clusterCount(), 2, "count");
+        address[] memory list = f.listClusters();
+        assertEq(list.length, 2, "list length");
+        assertEq(list[0], a, "list[0] preserved");
+        assertEq(list[1], b, "list[1] preserved");
+        assertTrue(f.isDeployedCluster(a), "A still tracked");
+        assertTrue(f.isDeployedCluster(b), "B still tracked");
+    }
+
+    /// End-to-end: upgrade impl, then deploy a cluster against the
+    /// post-upgrade impl and confirm the deploy path still works.
+    /// Catches the case where a malformed new impl breaks the deploy
+    /// path.
+    function test_upgrade_thenDeployCluster_works() public {
+        ClusterDiamondFactory f = _freshFactory();
+        UUPSUpgradeable(address(f)).upgradeToAndCall(address(new ClusterDiamondFactory()), "");
+
+        address d = _deployClusterViaFactory(bytes32(0));
+        assertTrue(f.isDeployedCluster(d), "post-upgrade deploy registered");
+        assertEq(f.clusterCount(), 1, "count incremented");
+    }
+
+    /// EIP-1967 impl slot and ERC-7201 ClusterFactory slot must coexist
+    /// without collision. Lock-in for spec §3.0 storage non-conflict claim.
+    function test_proxy_storage_doesNotOverlap_eip1967_with_erc7201() public {
+        ClusterDiamondFactory f = _freshFactory();
+        // ClusterFactoryStorage SLOT, pinned in spec §3.3
+        bytes32 erc7201Slot = 0x3dde469251f57f7dd4cc59a0b621bdd53104456939a109094995dee88fec1700;
+        bytes32 eip1967Slot = bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1);
+        assertTrue(erc7201Slot != eip1967Slot, "slots must be distinct");
+
+        // Both hold meaningful values simultaneously.
+        bytes32 implWord = vm.load(address(f), eip1967Slot);
+        assertTrue(implWord != bytes32(0), "EIP-1967 impl set by ERC1967Proxy ctor");
+
+        bytes32 adminWord = vm.load(address(f), erc7201Slot);
+        // First slot of ClusterFactoryStorage.Layout is `admin`; the
+        // initialize call should have populated it.
+        assertEq(address(uint160(uint256(adminWord))), deployer, "ERC-7201 admin slot populated");
     }
 }

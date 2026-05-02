@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
 import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
 import {IDiamondReadable} from "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
 import {IERC2535DiamondCutInternal} from "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
@@ -153,7 +155,15 @@ contract DiamondSmokeTest is Test {
 
         // Step 1: deploy chain singletons.
         dstackMemberImpl = new DstackMember();
-        factory = new ClusterMemberFactory(deployer);
+
+        // ClusterMemberFactory is a UUPS proxy (spec
+        // cluster-diamond-factory-and-member-provenance.md §3.0). Deploy
+        // the impl once, then wrap in ERC1967Proxy with initialize(deployer).
+        ClusterMemberFactory factoryImpl = new ClusterMemberFactory();
+        bytes memory factoryInit = abi.encodeCall(ClusterMemberFactory.initialize, (deployer));
+        factory = ClusterMemberFactory(
+            address(new ERC1967Proxy(address(factoryImpl), factoryInit))
+        );
 
         coreFacet = new CoreFacet();
         adminFacet = new AdminFacet();
