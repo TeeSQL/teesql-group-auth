@@ -55,8 +55,7 @@ library CoreStorage {
         bytes encryptedPayload;
     }
 
-    bytes32 internal constant SLOT =
-        0x0d2b39176970d8d514a9c53ecdd18f476e2d8dc24d9a92c32af469b1408bb000;
+    bytes32 internal constant SLOT = 0x0d2b39176970d8d514a9c53ecdd18f476e2d8dc24d9a92c32af469b1408bb000;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

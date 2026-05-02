@@ -20,8 +20,7 @@ import {KmsDstackStorage} from "../../storage/KmsDstackStorage.sol";
 ///         KMS id pinned in spec §19.1.
 contract DstackKmsAdapterFacet is IDstackKmsAdapter {
     /// @notice keccak256("teesql.kms.dstack") — pinned in spec §19.1.
-    bytes32 public constant DSTACK_KMS_ID =
-        0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
+    bytes32 public constant DSTACK_KMS_ID = 0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
 
     // --- Events ---
     event KmsSet(address indexed kms);
@@ -98,11 +97,7 @@ contract DstackKmsAdapterFacet is IDstackKmsAdapter {
     ///      on the diamond, defeating the namespacing discipline of §13.1).
     ///      Pure helpers (`recover`, `compressedToAddress`) still live in
     ///      the library — they touch no registry state.
-    function _verifySigChain(bytes calldata proof)
-        private
-        view
-        returns (bytes32 codeId, bytes memory derivedPubkey)
-    {
+    function _verifySigChain(bytes calldata proof) private view returns (bytes32 codeId, bytes memory derivedPubkey) {
         DstackSigChain.Proof memory p = abi.decode(proof, (DstackSigChain.Proof));
 
         // codeId = bytes32(bytes20(appId)): top 20 bytes carry the address,
@@ -120,17 +115,15 @@ contract DstackKmsAdapterFacet is IDstackKmsAdapter {
         // Step 2: KMS root signs "dstack-kms-issued:" || bytes20(appId) || appPubkey.
         //         Recovered KMS signer must be in our allowedKmsRoots set.
         {
-            bytes32 kmsMsgHash = keccak256(
-                abi.encodePacked("dstack-kms-issued:", bytes20(p.codeId), p.appCompressedPubkey)
-            );
+            bytes32 kmsMsgHash =
+                keccak256(abi.encodePacked("dstack-kms-issued:", bytes20(p.codeId), p.appCompressedPubkey));
             address kmsSigner = DstackSigChain.recover(kmsMsgHash, p.kmsSignature);
             if (!KmsDstackStorage.layout().allowedKmsRoots[kmsSigner]) revert InvalidSigChain();
         }
 
         // Step 3: derived key signs messageHash (EIP-191).
         {
-            bytes32 ethHash =
-                keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", p.messageHash));
+            bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", p.messageHash));
             address messageSigner = DstackSigChain.recover(ethHash, p.messageSignature);
             if (messageSigner != DstackSigChain.compressedToAddress(p.derivedCompressedPubkey)) {
                 revert InvalidSigChain();

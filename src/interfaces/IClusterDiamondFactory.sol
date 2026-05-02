@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IDiamondWritableInternal} from
-    "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
+import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
 
 /// @title IClusterDiamondFactory
 /// @notice External surface for the chain-singleton `ClusterDiamondFactory`.
@@ -11,11 +10,7 @@ import {IDiamondWritableInternal} from
 ///         provenance reads (gas-sponsorship webhook, hub fleet
 ///         enumeration). Mirrors `IClusterMemberFactory`'s shape.
 interface IClusterDiamondFactory {
-    event ClusterDeployed(
-        address indexed diamond,
-        address indexed deployer,
-        bytes32 indexed salt
-    );
+    event ClusterDeployed(address indexed diamond, address indexed deployer, bytes32 indexed salt);
     event AdminTransferStarted(address indexed previousAdmin, address indexed newAdmin);
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
 

@@ -115,11 +115,8 @@ contract AdminFacet is IAdmin {
     function authorizeSigner(address signer, uint8 permissions) external onlyOwner whenNotDestroyed {
         if (signer == address(0)) revert ZeroAddress();
         if (permissions == 0 || permissions > 3) revert BadPerms();
-        AllowlistsStorage.layout().authorizedSigners[signer] = AllowlistsStorage.AuthorizedSigner({
-            permissions: permissions,
-            active: true,
-            authorizedAt: block.timestamp
-        });
+        AllowlistsStorage.layout().authorizedSigners[signer] =
+            AllowlistsStorage.AuthorizedSigner({permissions: permissions, active: true, authorizedAt: block.timestamp});
         emit SignerAuthorized(signer, permissions);
     }
 
@@ -130,11 +127,7 @@ contract AdminFacet is IAdmin {
 
     // --- Two-axis adapter management ---
 
-    function registerAttestationAdapter(bytes32 attestationId, address facet)
-        external
-        onlyOwner
-        whenNotDestroyed
-    {
+    function registerAttestationAdapter(bytes32 attestationId, address facet) external onlyOwner whenNotDestroyed {
         if (attestationId == bytes32(0) || facet == address(0)) revert ZeroAddress();
         AdapterRegistryStorage.Layout storage a = AdapterRegistryStorage.layout();
         if (a.attestationFacet[attestationId] == address(0)) {

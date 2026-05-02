@@ -4,8 +4,7 @@ pragma solidity ^0.8.24;
 import {DiamondSmokeTest, IClusterView, MockDstackKms} from "../DiamondSmoke.t.sol";
 
 import {IDiamondReadable} from "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
-import {IERC2535DiamondCutInternal} from
-    "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
+import {IERC2535DiamondCutInternal} from "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
 import {IERC2535DiamondCut} from "@solidstate/contracts/interfaces/IERC2535DiamondCut.sol";
 import {IERC173} from "@solidstate/contracts/interfaces/IERC173.sol";
 import {ISafeOwnable} from "@solidstate/contracts/access/ownable/ISafeOwnable.sol";
@@ -23,10 +22,7 @@ import {CoreStorage} from "src/storage/CoreStorage.sol";
 ///         diamond's signer-bitmask getter without importing the facet contract.
 interface IClusterSignerView {
     function isSignerAuthorized(address s, uint8 required) external view returns (bool);
-    function authorizedSigners(address s)
-        external
-        view
-        returns (uint8 permissions, bool active, uint256 authorizedAt);
+    function authorizedSigners(address s) external view returns (uint8 permissions, bool active, uint256 authorizedAt);
 }
 
 /// @notice Comprehensive test suite for `AdminFacet`. Inherits the full diamond
@@ -41,10 +37,8 @@ contract AdminFacetTest is DiamondSmokeTest {
     address internal constant NEW_OWNER = address(0xC0FFEE);
     address internal constant SIGNER_A = address(0x5161E1A);
 
-    bytes32 internal constant HASH_A =
-        0x2222222222222222222222222222222222222222222222222222222222222222;
-    bytes32 internal constant DEVICE_A =
-        0x3333333333333333333333333333333333333333333333333333333333333333;
+    bytes32 internal constant HASH_A = 0x2222222222222222222222222222222222222222222222222222222222222222;
+    bytes32 internal constant DEVICE_A = 0x3333333333333333333333333333333333333333333333333333333333333333;
 
     // CoreStorage.Layout slot offsets (relative to CoreStorage.SLOT). See
     // CoreStorage.sol -- the struct field order is the source of truth.
@@ -52,10 +46,8 @@ contract AdminFacetTest is DiamondSmokeTest {
     uint256 internal constant CORE_LEADER_MEMBER_ID_OFFSET = 9;
     uint256 internal constant CORE_IS_OUR_PASSTHROUGH_OFFSET = 11;
 
-    bytes32 internal constant FAKE_ATTEST_ID =
-        0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
-    bytes32 internal constant FAKE_KMS_ID =
-        0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    bytes32 internal constant FAKE_ATTEST_ID = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+    bytes32 internal constant FAKE_KMS_ID = 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
     address internal constant FAKE_FACET = address(0xBADCAFE);
 
     // --- Helpers -----------------------------------------------------------
@@ -66,12 +58,7 @@ contract AdminFacetTest is DiamondSmokeTest {
     ///      keeps the auth-side tests focused on AdminFacet's gates rather than
     ///      Core's lifecycle.
     function _markPassthrough(address addr) internal {
-        bytes32 slot = keccak256(
-            abi.encode(
-                addr,
-                bytes32(uint256(CoreStorage.SLOT) + CORE_IS_OUR_PASSTHROUGH_OFFSET)
-            )
-        );
+        bytes32 slot = keccak256(abi.encode(addr, bytes32(uint256(CoreStorage.SLOT) + CORE_IS_OUR_PASSTHROUGH_OFFSET)));
         vm.store(address(diamond), slot, bytes32(uint256(1)));
     }
 
@@ -82,12 +69,7 @@ contract AdminFacetTest is DiamondSmokeTest {
     ///      bootstrap that would otherwise be required to mint a real
     ///      member for retire tests.
     function _plantMember(bytes32 memberId, address instanceId) internal {
-        bytes32 base = keccak256(
-            abi.encode(
-                memberId,
-                bytes32(uint256(CoreStorage.SLOT) + CORE_MEMBERS_OFFSET)
-            )
-        );
+        bytes32 base = keccak256(abi.encode(memberId, bytes32(uint256(CoreStorage.SLOT) + CORE_MEMBERS_OFFSET)));
         vm.store(address(diamond), base, bytes32(uint256(uint160(instanceId))));
     }
 
@@ -246,8 +228,7 @@ contract AdminFacetTest is DiamondSmokeTest {
     function test_revokeSigner_clearsActive() public {
         _buildDiamond();
         IAdmin(address(diamond)).authorizeSigner(SIGNER_A, 3);
-        (uint8 permsBefore, bool activeBefore,) =
-            IClusterSignerView(address(diamond)).authorizedSigners(SIGNER_A);
+        (uint8 permsBefore, bool activeBefore,) = IClusterSignerView(address(diamond)).authorizedSigners(SIGNER_A);
         assertEq(permsBefore, 3);
         assertTrue(activeBefore);
 
@@ -255,8 +236,7 @@ contract AdminFacetTest is DiamondSmokeTest {
         emit IAdmin.SignerRevoked(SIGNER_A);
         IAdmin(address(diamond)).revokeSigner(SIGNER_A);
 
-        (uint8 permsAfter, bool activeAfter,) =
-            IClusterSignerView(address(diamond)).authorizedSigners(SIGNER_A);
+        (uint8 permsAfter, bool activeAfter,) = IClusterSignerView(address(diamond)).authorizedSigners(SIGNER_A);
         assertEq(permsAfter, 3, "permissions preserved");
         assertFalse(activeAfter, "active flipped");
     }
@@ -495,8 +475,7 @@ contract AdminFacetTest is DiamondSmokeTest {
         // must NOT push a duplicate into the enumeration array.
         address newFacet = address(0xBAD2);
         IAdmin(address(diamond)).registerAttestationAdapter(idA, newFacet);
-        bytes32[] memory afterReregister =
-            IAdapterRegistry(address(diamond)).listAttestationIds();
+        bytes32[] memory afterReregister = IAdapterRegistry(address(diamond)).listAttestationIds();
         assertEq(afterReregister.length, 2, "re-register doesn't duplicate enumeration");
         assertEq(IAdapterRegistry(address(diamond)).attestationFacet(idA), newFacet);
 
@@ -537,8 +516,7 @@ contract AdminFacetTest is DiamondSmokeTest {
         IAdmin(address(diamond)).deregisterAttestationAdapter(DSTACK_ATTESTATION_ID);
 
         assertFalse(
-            IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID),
-            "registered flipped"
+            IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID), "registered flipped"
         );
         // Facet pointer survives -- soft-disable, not erase.
         assertEq(
@@ -566,25 +544,16 @@ contract AdminFacetTest is DiamondSmokeTest {
         _buildDiamond();
         IAdmin(address(diamond)).deregisterAttestationAdapter(DSTACK_ATTESTATION_ID);
         vm.expectRevert(ICore.AdapterNotRegistered.selector);
-        ICore(address(diamond)).createMember(
-            bytes32(uint256(99)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        ICore(address(diamond)).createMember(bytes32(uint256(99)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
     }
 
     function test_deregisterAttestationAdapter_canBeReRegistered() public {
         _buildDiamond();
         IAdmin(address(diamond)).deregisterAttestationAdapter(DSTACK_ATTESTATION_ID);
-        assertFalse(
-            IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID)
-        );
+        assertFalse(IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID));
         // Flip back: re-register with the same facet pointer.
-        IAdmin(address(diamond)).registerAttestationAdapter(
-            DSTACK_ATTESTATION_ID, address(dstackAttestationFacet)
-        );
-        assertTrue(
-            IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID),
-            "re-registered"
-        );
+        IAdmin(address(diamond)).registerAttestationAdapter(DSTACK_ATTESTATION_ID, address(dstackAttestationFacet));
+        assertTrue(IAdapterRegistry(address(diamond)).attestationRegistered(DSTACK_ATTESTATION_ID), "re-registered");
     }
 
     function test_setDefaultAttestationAdapter_revertsOnUnregistered() public {
@@ -675,9 +644,7 @@ contract AdminFacetTest is DiamondSmokeTest {
         _buildDiamond();
         IAdmin(address(diamond)).deregisterKmsAdapter(DSTACK_KMS_ID);
         vm.expectRevert(ICore.AdapterNotRegistered.selector);
-        ICore(address(diamond)).createMember(
-            bytes32(uint256(123)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        ICore(address(diamond)).createMember(bytes32(uint256(123)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
     }
 
     function test_deregisterKmsAdapter_canBeReRegistered() public {
@@ -719,11 +686,7 @@ contract AdminFacetTest is DiamondSmokeTest {
     function test_transferOwnership_setsNominee() public {
         _buildDiamond();
         IERC173(address(diamond)).transferOwnership(NEW_OWNER);
-        assertEq(
-            ISafeOwnable(address(diamond)).nomineeOwner(),
-            NEW_OWNER,
-            "nominee written"
-        );
+        assertEq(ISafeOwnable(address(diamond)).nomineeOwner(), NEW_OWNER, "nominee written");
         assertEq(IERC173(address(diamond)).owner(), deployer, "owner unchanged");
     }
 
@@ -733,11 +696,7 @@ contract AdminFacetTest is DiamondSmokeTest {
         vm.prank(NEW_OWNER);
         ISafeOwnable(address(diamond)).acceptOwnership();
         assertEq(IERC173(address(diamond)).owner(), NEW_OWNER);
-        assertEq(
-            ISafeOwnable(address(diamond)).nomineeOwner(),
-            address(0),
-            "nominee cleared post-accept"
-        );
+        assertEq(ISafeOwnable(address(diamond)).nomineeOwner(), address(0), "nominee cleared post-accept");
     }
 
     function test_acceptOwnership_revertsForNonNominee() public {
@@ -827,14 +786,11 @@ contract AdminFacetTest is DiamondSmokeTest {
         // instance -- same bytecode, different deployed address. The facets
         // tuple includes facet target addresses, so the bundle hash changes.
         ViewFacet newView = new ViewFacet();
-        IERC2535DiamondCutInternal.FacetCut[] memory cuts =
-            new IERC2535DiamondCutInternal.FacetCut[](1);
+        IERC2535DiamondCutInternal.FacetCut[] memory cuts = new IERC2535DiamondCutInternal.FacetCut[](1);
         bytes4[] memory sel = new bytes4[](1);
         sel[0] = ViewFacet.clusterId.selector;
         cuts[0] = IERC2535DiamondCutInternal.FacetCut({
-            target: address(newView),
-            action: IERC2535DiamondCutInternal.FacetCutAction.REPLACE,
-            selectors: sel
+            target: address(newView), action: IERC2535DiamondCutInternal.FacetCutAction.REPLACE, selectors: sel
         });
         IERC2535DiamondCut(address(diamond)).diamondCut(cuts, address(0), "");
 

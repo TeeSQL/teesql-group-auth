@@ -54,19 +54,13 @@ contract ViewFacet {
         return AllowlistsStorage.layout().allowAnyDevice;
     }
 
-    function authorizedSigners(address s)
-        external
-        view
-        returns (uint8 permissions, bool active, uint256 authorizedAt)
-    {
-        AllowlistsStorage.AuthorizedSigner storage signer =
-            AllowlistsStorage.layout().authorizedSigners[s];
+    function authorizedSigners(address s) external view returns (uint8 permissions, bool active, uint256 authorizedAt) {
+        AllowlistsStorage.AuthorizedSigner storage signer = AllowlistsStorage.layout().authorizedSigners[s];
         return (signer.permissions, signer.active, signer.authorizedAt);
     }
 
     function isSignerAuthorized(address s, uint8 required) external view returns (bool) {
-        AllowlistsStorage.AuthorizedSigner storage signer =
-            AllowlistsStorage.layout().authorizedSigners[s];
+        AllowlistsStorage.AuthorizedSigner storage signer = AllowlistsStorage.layout().authorizedSigners[s];
         return signer.active && (signer.permissions & required) == required;
     }
 }

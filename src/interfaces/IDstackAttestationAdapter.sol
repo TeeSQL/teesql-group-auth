@@ -20,8 +20,7 @@ interface IDstackAttestationAdapter {
     /// Boot gate entry point. DstackKms calls IAppAuth(passthrough).isAppAllowed,
     /// DstackMember forwards to dstack_isAppAllowed. Combines cluster-wide
     /// BootGate checks with dstack-runtime-specific policy.
-    function dstack_isAppAllowed(IAppAuth.AppBootInfo calldata b)
-        external view returns (bool ok, string memory reason);
+    function dstack_isAppAllowed(IAppAuth.AppBootInfo calldata b) external view returns (bool ok, string memory reason);
 
     /// Optional mint hook — selector exists for symmetry. dstack runtime has
     /// no work today; reverts if called inappropriately.

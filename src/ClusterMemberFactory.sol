@@ -56,10 +56,7 @@ contract ClusterMemberFactory is IClusterMemberFactory {
     /// `registeredAttestationIds`; subsequent calls rotate the impl
     /// (existing members are untouched — only future deploys land on the
     /// new impl, see spec §8.2).
-    function setMemberImpl(bytes32 attestationId, address newImpl)
-        external
-        onlyAdmin
-    {
+    function setMemberImpl(bytes32 attestationId, address newImpl) external onlyAdmin {
         if (attestationId == bytes32(0) || newImpl == address(0)) {
             revert ZeroAddress();
         }
@@ -97,21 +94,13 @@ contract ClusterMemberFactory is IClusterMemberFactory {
     /// natural caller. The deployed proxy is inert until the cluster
     /// registers it (Core marks `isOurPassthrough` and the AdapterRegistry
     /// records the two-axis assignment).
-    function deployMember(address cluster, bytes32 salt, bytes32 attestationId)
-        public
-        returns (address proxy)
-    {
+    function deployMember(address cluster, bytes32 salt, bytes32 attestationId) public returns (address proxy) {
         if (cluster == address(0)) revert ZeroAddress();
         address impl = FactoryStorage.layout().memberImpl[attestationId];
         if (impl == address(0)) revert ImplNotRegistered();
 
-        bytes32 effectiveSalt = keccak256(
-            abi.encode(cluster, attestationId, salt)
-        );
-        bytes memory initCalldata = abi.encodeCall(
-            IMemberInit.initialize,
-            (cluster)
-        );
+        bytes32 effectiveSalt = keccak256(abi.encode(cluster, attestationId, salt));
+        bytes memory initCalldata = abi.encodeCall(IMemberInit.initialize, (cluster));
         proxy = address(new ERC1967Proxy{salt: effectiveSalt}(impl, initCalldata));
         FactoryStorage.layout().deployedMembers[proxy] = true;
         emit MemberDeployed(cluster, salt, attestationId, proxy, impl);
@@ -131,42 +120,27 @@ contract ClusterMemberFactory is IClusterMemberFactory {
     ///      between predict and deploy. Operators (and Core's
     ///      `createMember`) should use `deployMemberWithExpectedImpl` to
     ///      pin the impl atomically — see spec §8.3.
-    function predict(address cluster, bytes32 salt, bytes32 attestationId)
-        external
-        view
-        returns (address)
-    {
+    function predict(address cluster, bytes32 salt, bytes32 attestationId) external view returns (address) {
         address impl = FactoryStorage.layout().memberImpl[attestationId];
         if (impl == address(0)) revert ImplNotRegistered();
-        bytes32 effectiveSalt = keccak256(
-            abi.encode(cluster, attestationId, salt)
+        bytes32 effectiveSalt = keccak256(abi.encode(cluster, attestationId, salt));
+        bytes memory initCalldata = abi.encodeCall(IMemberInit.initialize, (cluster));
+        bytes memory bytecode = abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(impl, initCalldata));
+        return address(
+            uint160(
+                uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), effectiveSalt, keccak256(bytecode))))
+            )
         );
-        bytes memory initCalldata = abi.encodeCall(
-            IMemberInit.initialize,
-            (cluster)
-        );
-        bytes memory bytecode = abi.encodePacked(
-            type(ERC1967Proxy).creationCode,
-            abi.encode(impl, initCalldata)
-        );
-        return address(uint160(uint256(keccak256(abi.encodePacked(
-            bytes1(0xff),
-            address(this),
-            effectiveSalt,
-            keccak256(bytecode)
-        )))));
     }
 
     /// Atomic variant of `deployMember` — reverts with `ImplDriftDetected`
     /// if `memberImpl[attestationId]` has rotated since the caller predicted
     /// the address. Core's `createMember` calls this; operator tooling
     /// should too.
-    function deployMemberWithExpectedImpl(
-        address cluster,
-        bytes32 salt,
-        bytes32 attestationId,
-        address expectedImpl
-    ) external returns (address proxy) {
+    function deployMemberWithExpectedImpl(address cluster, bytes32 salt, bytes32 attestationId, address expectedImpl)
+        external
+        returns (address proxy)
+    {
         if (FactoryStorage.layout().memberImpl[attestationId] != expectedImpl) {
             revert ImplDriftDetected();
         }

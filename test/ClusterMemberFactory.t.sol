@@ -17,8 +17,7 @@ import {DstackMember} from "src/members/DstackMember.sol";
 ///         each test here does its own factory wiring so we do not
 ///         contaminate the smoke-test fixture.
 contract ClusterMemberFactoryTest is DiamondSmokeTest {
-    bytes32 internal constant ALT_ATTESTATION_ID =
-        0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
+    bytes32 internal constant ALT_ATTESTATION_ID = 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;
 
     address internal stranger = address(0xBEEF);
     address internal newAdmin = address(0xABCD);
@@ -34,11 +33,7 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
         bytes32[] memory ids = factory.registeredAttestationIds();
         assertEq(ids.length, 1, "len after first set");
         assertEq(ids[0], DSTACK_ATTESTATION_ID, "id pushed");
-        assertEq(
-            factory.memberImpl(DSTACK_ATTESTATION_ID),
-            address(dstackMemberImpl),
-            "impl mapped"
-        );
+        assertEq(factory.memberImpl(DSTACK_ATTESTATION_ID), address(dstackMemberImpl), "impl mapped");
     }
 
     function test_setMemberImpl_subsequentCallRotatesWithoutAppending() public {
@@ -49,11 +44,7 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
 
         bytes32[] memory ids = factory.registeredAttestationIds();
         assertEq(ids.length, 1, "no append on rotate");
-        assertEq(
-            factory.memberImpl(DSTACK_ATTESTATION_ID),
-            address(newImpl),
-            "impl rotated"
-        );
+        assertEq(factory.memberImpl(DSTACK_ATTESTATION_ID), address(newImpl), "impl rotated");
     }
 
     function test_setMemberImpl_revertsOnZeroId() public {
@@ -80,21 +71,13 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
 
     function test_setMemberImpl_emitsEvent() public {
         vm.expectEmit(true, true, true, true, address(factory));
-        emit IClusterMemberFactory.MemberImplUpdated(
-            DSTACK_ATTESTATION_ID,
-            address(0),
-            address(dstackMemberImpl)
-        );
+        emit IClusterMemberFactory.MemberImplUpdated(DSTACK_ATTESTATION_ID, address(0), address(dstackMemberImpl));
         factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(dstackMemberImpl));
 
         // Also exercise the rotation event (non-zero `oldImpl`).
         DstackMember rotated = new DstackMember();
         vm.expectEmit(true, true, true, true, address(factory));
-        emit IClusterMemberFactory.MemberImplUpdated(
-            DSTACK_ATTESTATION_ID,
-            address(dstackMemberImpl),
-            address(rotated)
-        );
+        emit IClusterMemberFactory.MemberImplUpdated(DSTACK_ATTESTATION_ID, address(dstackMemberImpl), address(rotated));
         factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(rotated));
     }
 
@@ -139,9 +122,8 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
         bytes32 salt = bytes32(uint256(11));
 
         address predicted = factory.predict(cluster, salt, DSTACK_ATTESTATION_ID);
-        address actual = factory.deployMemberWithExpectedImpl(
-            cluster, salt, DSTACK_ATTESTATION_ID, address(dstackMemberImpl)
-        );
+        address actual =
+            factory.deployMemberWithExpectedImpl(cluster, salt, DSTACK_ATTESTATION_ID, address(dstackMemberImpl));
 
         assertEq(actual, predicted, "atomic deploy address matches predict");
     }
@@ -156,12 +138,7 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
         factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(newImpl));
 
         vm.expectRevert(IClusterMemberFactory.ImplDriftDetected.selector);
-        factory.deployMemberWithExpectedImpl(
-            address(0xC1AE),
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            expectedImpl
-        );
+        factory.deployMemberWithExpectedImpl(address(0xC1AE), bytes32(uint256(1)), DSTACK_ATTESTATION_ID, expectedImpl);
     }
 
     function test_predictedAddress_changesAfterImplRotation() public {
@@ -239,10 +216,6 @@ contract ClusterMemberFactoryTest is DiamondSmokeTest {
         // The new admin can.
         vm.prank(newAdmin);
         factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(dstackMemberImpl));
-        assertEq(
-            factory.memberImpl(DSTACK_ATTESTATION_ID),
-            address(dstackMemberImpl),
-            "new admin can mutate"
-        );
+        assertEq(factory.memberImpl(DSTACK_ATTESTATION_ID), address(dstackMemberImpl), "new admin can mutate");
     }
 }

@@ -19,8 +19,7 @@ library ClusterFactoryStorage {
         address[] registeredClusters;
     }
 
-    bytes32 internal constant SLOT =
-        0x3dde469251f57f7dd4cc59a0b621bdd53104456939a109094995dee88fec1700;
+    bytes32 internal constant SLOT = 0x3dde469251f57f7dd4cc59a0b621bdd53104456939a109094995dee88fec1700;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

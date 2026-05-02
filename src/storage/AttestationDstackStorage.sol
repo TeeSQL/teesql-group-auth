@@ -10,8 +10,7 @@ library AttestationDstackStorage {
         bool requireTcbUpToDate;
     }
 
-    bytes32 internal constant SLOT =
-        0xd7792075c59b42042554c184711f2bbdb0cf33034e870c3d398f5dda38b39300;
+    bytes32 internal constant SLOT = 0xd7792075c59b42042554c184711f2bbdb0cf33034e870c3d398f5dda38b39300;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

@@ -19,8 +19,7 @@ import {DstackSigChain} from "../DstackSigChain.sol";
 contract CoreFacet is ICore {
     bytes32 internal constant DSTACK_ATTESTATION_ID =
         0x33a9d6b17861ebd35aca9a68779e7b913c04060dc2f6ab672d9f190a13924d80;
-    bytes32 internal constant DSTACK_KMS_ID =
-        0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
+    bytes32 internal constant DSTACK_KMS_ID = 0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
 
     string private constant _REGISTER_MSG_PREFIX = "teesql-cluster-register:v3";
     string private constant _CALL_MSG_PREFIX = "teesql-cluster-call:v1";
@@ -47,12 +46,7 @@ contract CoreFacet is ICore {
 
     // --- Membership ---
 
-    function register(RegisterArgs calldata a)
-        external
-        whenNotPaused
-        whenNotDestroyed
-        returns (bytes32 memberId)
-    {
+    function register(RegisterArgs calldata a) external whenNotPaused whenNotDestroyed returns (bytes32 memberId) {
         // TODO(future-kms-dispatch): hardcoded to the dstack KMS adapter at
         // v4 cutover because it is the only KMS adapter on the diamond. Once
         // a second KmsAdapter ships, this dispatch needs to resolve the
@@ -230,18 +224,18 @@ contract CoreFacet is ICore {
         bytes32 effectiveSalt = salt == bytes32(0) ? bytes32(uint256($.nextMemberSeq++)) : salt;
 
         address factory = $.factory;
-        address predicted =
-            IClusterMemberFactory(factory).predict(address(this), effectiveSalt, effectiveAttestation);
+        address predicted = IClusterMemberFactory(factory).predict(address(this), effectiveSalt, effectiveAttestation);
 
         reg.passthroughToAttestationId[predicted] = effectiveAttestation;
         reg.passthroughToKmsId[predicted] = effectiveKms;
 
-        passthrough = IClusterMemberFactory(factory).deployMemberWithExpectedImpl(
-            address(this),
-            effectiveSalt,
-            effectiveAttestation,
-            IClusterMemberFactory(factory).memberImpl(effectiveAttestation)
-        );
+        passthrough = IClusterMemberFactory(factory)
+            .deployMemberWithExpectedImpl(
+                address(this),
+                effectiveSalt,
+                effectiveAttestation,
+                IClusterMemberFactory(factory).memberImpl(effectiveAttestation)
+            );
 
         $.isOurPassthrough[passthrough] = true;
 
@@ -313,9 +307,7 @@ contract CoreFacet is ICore {
         returns (bytes32)
     {
         return keccak256(
-            abi.encode(
-                _CALL_MSG_PREFIX, block.chainid, address(this), memberId, nonce, selector, keccak256(args)
-            )
+            abi.encode(_CALL_MSG_PREFIX, block.chainid, address(this), memberId, nonce, selector, keccak256(args))
         );
     }
 

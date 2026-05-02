@@ -15,8 +15,7 @@ library LifecycleStorage {
         mapping(bytes32 => uint256) memberRetiredAt;
     }
 
-    bytes32 internal constant SLOT =
-        0xc40c1e00df80b3f4c543e37f29794c2b75c2c19948cdc128beef18bd67649200;
+    bytes32 internal constant SLOT = 0xc40c1e00df80b3f4c543e37f29794c2b75c2c19948cdc128beef18bd67649200;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

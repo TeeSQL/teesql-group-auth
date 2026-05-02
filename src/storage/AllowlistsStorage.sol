@@ -20,8 +20,7 @@ library AllowlistsStorage {
         uint256 authorizedAt;
     }
 
-    bytes32 internal constant SLOT =
-        0xcdbccb570e3ddeff5f78f96ecefff8bfca6530b9eb528384193698ff8c203000;
+    bytes32 internal constant SLOT = 0xcdbccb570e3ddeff5f78f96ecefff8bfca6530b9eb528384193698ff8c203000;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

@@ -16,10 +16,8 @@ import {IDstackKmsAdapter} from "src/interfaces/IDstackKmsAdapter.sol";
 ///         for the deployed-diamond fixture; each test invokes
 ///         `_buildDiamond` to get a fresh diamond it can poke at.
 contract BootGateFacetTest is DiamondSmokeTest {
-    bytes32 internal constant TEST_COMPOSE =
-        0x2222222222222222222222222222222222222222222222222222222222222222;
-    bytes32 internal constant TEST_DEVICE =
-        0x3333333333333333333333333333333333333333333333333333333333333333;
+    bytes32 internal constant TEST_COMPOSE = 0x2222222222222222222222222222222222222222222222222222222222222222;
+    bytes32 internal constant TEST_DEVICE = 0x3333333333333333333333333333333333333333333333333333333333333333;
 
     /// @dev Builds the diamond, mints a passthrough so we have a real
     ///      `isOurPassthrough` entry to feed the gate, and seeds the
@@ -30,11 +28,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
         _buildDiamond();
         IDstackKmsAdapter(address(diamond)).dstack_kms_setKms(address(mockKms));
 
-        passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        passthrough = ICore(address(diamond)).createMember(bytes32(uint256(1)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         IAdmin(address(diamond)).addComposeHash(TEST_COMPOSE);
         IAdmin(address(diamond)).addDevice(TEST_DEVICE);
@@ -59,12 +53,8 @@ contract BootGateFacetTest is DiamondSmokeTest {
 
         // Pass a deliberately-bad compose hash and an unknown device to
         // verify the destroyed check fires FIRST (highest precedence).
-        (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                passthrough,
-                bytes32(uint256(0xDEAD)),
-                bytes32(uint256(0xBEEF))
-            );
+        (bool ok, string memory reason) = IBootGate(address(diamond))
+            .clusterBootPolicy(passthrough, bytes32(uint256(0xDEAD)), bytes32(uint256(0xBEEF)));
 
         assertFalse(ok, "destroy must reject");
         assertEq(reason, "cluster destroyed", "destroy reason");
@@ -80,11 +70,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
         // Pass a deliberately-bad compose hash to verify the paused check
         // fires before the compose-hash check.
         (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                passthrough,
-                bytes32(uint256(0xDEAD)),
-                TEST_DEVICE
-            );
+            IBootGate(address(diamond)).clusterBootPolicy(passthrough, bytes32(uint256(0xDEAD)), TEST_DEVICE);
 
         assertFalse(ok, "pause must reject");
         assertEq(reason, "cluster paused", "pause reason");
@@ -96,11 +82,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
         // A random address that was never minted via createMember.
         address strangerPassthrough = address(0xFFEE);
         (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                strangerPassthrough,
-                TEST_COMPOSE,
-                TEST_DEVICE
-            );
+            IBootGate(address(diamond)).clusterBootPolicy(strangerPassthrough, TEST_COMPOSE, TEST_DEVICE);
 
         assertFalse(ok, "unknown passthrough must reject");
         assertEq(reason, "unknown passthrough", "unknown passthrough reason");
@@ -111,11 +93,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
 
         bytes32 unknownHash = bytes32(uint256(0xDEAD));
         (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                passthrough,
-                unknownHash,
-                TEST_DEVICE
-            );
+            IBootGate(address(diamond)).clusterBootPolicy(passthrough, unknownHash, TEST_DEVICE);
 
         assertFalse(ok, "unallowed compose must reject");
         assertEq(reason, "compose hash not allowed", "compose reason");
@@ -128,11 +106,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
         // in the allowlist => rejection.
         bytes32 unknownDevice = bytes32(uint256(0xC0FFEE));
         (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                passthrough,
-                TEST_COMPOSE,
-                unknownDevice
-            );
+            IBootGate(address(diamond)).clusterBootPolicy(passthrough, TEST_COMPOSE, unknownDevice);
 
         assertFalse(ok, "unallowed device must reject");
         assertEq(reason, "device not allowed", "device reason");
@@ -146,11 +120,7 @@ contract BootGateFacetTest is DiamondSmokeTest {
         // An unknown device must now bypass the allowlist check.
         bytes32 unknownDevice = bytes32(uint256(0xC0FFEE));
         (bool ok, string memory reason) =
-            IBootGate(address(diamond)).clusterBootPolicy(
-                passthrough,
-                TEST_COMPOSE,
-                unknownDevice
-            );
+            IBootGate(address(diamond)).clusterBootPolicy(passthrough, TEST_COMPOSE, unknownDevice);
 
         assertTrue(ok, "allowAnyDevice should pass any device");
         assertEq(bytes(reason).length, 0, "empty reason on pass");

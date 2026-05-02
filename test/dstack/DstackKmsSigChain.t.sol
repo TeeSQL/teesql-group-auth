@@ -62,51 +62,38 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
 
     // ─── Index → (privkey, address, compressedPubkey, prefix) table ────────
     // K1: prefix 0x03 (odd y)
-    uint256 internal constant PK1 =
-        0x1111111111111111111111111111111111111111111111111111111111111111;
+    uint256 internal constant PK1 = 0x1111111111111111111111111111111111111111111111111111111111111111;
     address internal constant ADDR1 = 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A;
-    bytes internal constant COMP1 =
-        hex"034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa";
+    bytes internal constant COMP1 = hex"034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa";
 
     // K2: prefix 0x02 (even y)
-    uint256 internal constant PK2 =
-        0x2222222222222222222222222222222222222222222222222222222222222222;
+    uint256 internal constant PK2 = 0x2222222222222222222222222222222222222222222222222222222222222222;
     address internal constant ADDR2 = 0x1563915e194D8CfBA1943570603F7606A3115508;
-    bytes internal constant COMP2 =
-        hex"02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27";
+    bytes internal constant COMP2 = hex"02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27";
 
     // K3: prefix 0x02
-    uint256 internal constant PK3 =
-        0x3333333333333333333333333333333333333333333333333333333333333333;
+    uint256 internal constant PK3 = 0x3333333333333333333333333333333333333333333333333333333333333333;
     address internal constant ADDR3 = 0x5CbDd86a2FA8Dc4bDdd8a8f69dBa48572EeC07FB;
-    bytes internal constant COMP3 =
-        hex"023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1";
+    bytes internal constant COMP3 = hex"023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1";
 
     // K4: prefix 0x03
-    uint256 internal constant PK4 =
-        0x4444444444444444444444444444444444444444444444444444444444444444;
+    uint256 internal constant PK4 = 0x4444444444444444444444444444444444444444444444444444444444444444;
     address internal constant ADDR4 = 0x7564105E977516C53bE337314c7E53838967bDaC;
-    bytes internal constant COMP4 =
-        hex"032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991";
+    bytes internal constant COMP4 = hex"032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991";
 
     // K5: prefix 0x02
-    uint256 internal constant PK5 =
-        0x5555555555555555555555555555555555555555555555555555555555555555;
+    uint256 internal constant PK5 = 0x5555555555555555555555555555555555555555555555555555555555555555;
     address internal constant ADDR5 = 0xe1fAE9b4fAB2F5726677ECfA912d96b0B683e6a9;
-    bytes internal constant COMP5 =
-        hex"029ac20335eb38768d2052be1dbbc3c8f6178407458e51e6b4ad22f1d91758895b";
+    bytes internal constant COMP5 = hex"029ac20335eb38768d2052be1dbbc3c8f6178407458e51e6b4ad22f1d91758895b";
 
     // K6: prefix 0x03
-    uint256 internal constant PK6 =
-        0x6666666666666666666666666666666666666666666666666666666666666666;
+    uint256 internal constant PK6 = 0x6666666666666666666666666666666666666666666666666666666666666666;
     address internal constant ADDR6 = 0xdb2430B4e9AC14be6554d3942822BE74811A1AF9;
-    bytes internal constant COMP6 =
-        hex"035ab4689e400a4a160cf01cd44730845a54768df8547dcdf073d964f109f18c30";
+    bytes internal constant COMP6 = hex"035ab4689e400a4a160cf01cd44730845a54768df8547dcdf073d964f109f18c30";
 
     // ─── Domain constants ──────────────────────────────────────────────────
-    bytes32 internal constant TEST_MESSAGE_HASH =
-        0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789;
-    string  internal constant DEFAULT_PURPOSE = "ethereum";
+    bytes32 internal constant TEST_MESSAGE_HASH = 0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789;
+    string internal constant DEFAULT_PURPOSE = "ethereum";
 
     // Diamond as IDstackKmsAdapter — set up via _ensureKms in each test.
     IDstackKmsAdapter internal kms;
@@ -142,16 +129,19 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4, // codeId carries an arbitrary app passthrough
             messageHash: TEST_MESSAGE_HASH,
             purpose: DEFAULT_PURPOSE
         });
 
-        (bytes32 codeId, bytes memory derivedPubkey) =
-            kms.dstack_kms_verifySigChain(abi.encode(p));
+        (bytes32 codeId, bytes memory derivedPubkey) = kms.dstack_kms_verifySigChain(abi.encode(p));
 
         assertEq(codeId, bytes32(bytes20(ADDR4)), "codeId echoed");
         assertEq(derivedPubkey, COMP2, "derivedPubkey echoed");
@@ -163,15 +153,19 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
 
         address appPassthrough = address(0xcafE000000000000000000000000000000000001);
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: appPassthrough,
             messageHash: TEST_MESSAGE_HASH,
             purpose: DEFAULT_PURPOSE
         });
 
-        (bytes32 codeId, ) = kms.dstack_kms_verifySigChain(abi.encode(p));
+        (bytes32 codeId,) = kms.dstack_kms_verifySigChain(abi.encode(p));
         assertEq(codeId, bytes32(bytes20(appPassthrough)), "codeId == bytes20(appId)");
         // Sanity: bottom 12 bytes are zero.
         assertEq(uint256(codeId) << 160, 0, "lower 12 bytes zero");
@@ -182,8 +176,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -205,8 +203,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         // Variant A: derived key has prefix 0x03 (K4)
         {
             DstackSigChain.Proof memory pA = _buildProof({
-                appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-                derivedPriv: PK4, derivedAddr: ADDR4, derivedComp: COMP4,
+                appPriv: PK1,
+                appAddr: ADDR1,
+                appComp: COMP1,
+                derivedPriv: PK4,
+                derivedAddr: ADDR4,
+                derivedComp: COMP4,
                 kmsPriv: PK3,
                 codeIdAppId: ADDR5,
                 messageHash: TEST_MESSAGE_HASH,
@@ -219,8 +221,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         // Variant B: derived key has prefix 0x02 (K2)
         {
             DstackSigChain.Proof memory pB = _buildProof({
-                appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-                derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+                appPriv: PK1,
+                appAddr: ADDR1,
+                appComp: COMP1,
+                derivedPriv: PK2,
+                derivedAddr: ADDR2,
+                derivedComp: COMP2,
                 kmsPriv: PK3,
                 codeIdAppId: ADDR5,
                 messageHash: TEST_MESSAGE_HASH,
@@ -242,8 +248,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -268,8 +278,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         // from the sig, but `_compressedPubkeyToAddress(COMP2) == ADDR2`
         // ≠ ADDR1, so step 4 reverts.
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK4, derivedAddr: ADDR4, derivedComp: COMP4,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK4,
+            derivedAddr: ADDR4,
+            derivedComp: COMP4,
             kmsPriv: PK3,
             codeIdAppId: ADDR5,
             messageHash: TEST_MESSAGE_HASH,
@@ -293,8 +307,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR5);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -318,8 +336,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         // the KMS sig too — wait, no: the KMS sig covers appCompressedPubkey,
         // not derived. Only the app sig depends on derivedCompressedPubkey.
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR5,
             messageHash: TEST_MESSAGE_HASH,
@@ -345,8 +367,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -366,8 +392,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -393,8 +423,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -417,8 +451,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -435,8 +473,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -453,8 +495,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -476,8 +522,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -491,7 +541,9 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         // DstackKmsAdapterFacet.sol:131-138 confirms step 3 runs before
         // step 4.
         bytes memory short = new bytes(32);
-        for (uint256 i = 0; i < 32; i++) short[i] = COMP2[i + 1];
+        for (uint256 i = 0; i < 32; i++) {
+            short[i] = COMP2[i + 1];
+        }
         p.derivedCompressedPubkey = short;
 
         vm.expectRevert(DstackSigChain.BadPubkey.selector);
@@ -503,8 +555,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -525,8 +581,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -628,8 +688,12 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
         kms.dstack_kms_addRoot(ADDR3);
 
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
@@ -649,22 +713,24 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
     function test_verifySigChain_doesNotMutateState() public withKms {
         kms.dstack_kms_addRoot(ADDR3);
         DstackSigChain.Proof memory p = _buildProof({
-            appPriv: PK1, appAddr: ADDR1, appComp: COMP1,
-            derivedPriv: PK2, derivedAddr: ADDR2, derivedComp: COMP2,
+            appPriv: PK1,
+            appAddr: ADDR1,
+            appComp: COMP1,
+            derivedPriv: PK2,
+            derivedAddr: ADDR2,
+            derivedComp: COMP2,
             kmsPriv: PK3,
             codeIdAppId: ADDR4,
             messageHash: TEST_MESSAGE_HASH,
             purpose: DEFAULT_PURPOSE
         });
 
-        bytes32 slotKms = KmsDstackStorage.SLOT;       // .kms
+        bytes32 slotKms = KmsDstackStorage.SLOT; // .kms
         // allowedKmsRoots is at SLOT + 1, but mappings store entries at
         // keccak(key . slot). We snapshot the literal Layout slots that are
         // value types (the kms address) AND the well-known mapping bucket
         // for ADDR3 to confirm no rewrite slips in.
-        bytes32 mappingKey = keccak256(
-            abi.encode(ADDR3, bytes32(uint256(slotKms) + 1))
-        );
+        bytes32 mappingKey = keccak256(abi.encode(ADDR3, bytes32(uint256(slotKms) + 1)));
 
         bytes32 kmsBefore = vm.load(address(diamond), slotKms);
         bytes32 rootBefore = vm.load(address(diamond), mappingKey);
@@ -717,7 +783,8 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
     ) internal pure returns (DstackSigChain.Proof memory p) {
         // Silence unused-arg warnings — these are documentation hooks for
         // the reader (so the call sites read declaratively).
-        appAddr; derivedAddr;
+        appAddr;
+        derivedAddr;
 
         p.codeId = bytes32(bytes20(codeIdAppId));
         p.messageHash = messageHash;
@@ -744,27 +811,15 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
 
     /// KMS root signs `keccak256("dstack-kms-issued:" || bytes20(appId) || appPubkey)`.
     /// Mirrors DstackKmsAdapterFacet.sol:122-125.
-    function _signKms(uint256 priv, bytes32 codeId, bytes memory appComp)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes32 hash = keccak256(
-            abi.encodePacked("dstack-kms-issued:", bytes20(codeId), appComp)
-        );
+    function _signKms(uint256 priv, bytes32 codeId, bytes memory appComp) internal pure returns (bytes memory) {
+        bytes32 hash = keccak256(abi.encodePacked("dstack-kms-issued:", bytes20(codeId), appComp));
         return _sign(priv, hash);
     }
 
     /// Derived key signs the EIP-191-prefixed messageHash. Mirrors
     /// DstackKmsAdapterFacet.sol:131-134.
-    function _signMessage(uint256 priv, bytes32 messageHash)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        bytes32 ethHash = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
-        );
+    function _signMessage(uint256 priv, bytes32 messageHash) internal pure returns (bytes memory) {
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
         return _sign(priv, ethHash);
     }
 
@@ -790,7 +845,9 @@ contract DstackKmsSigChainTest is DiamondSmokeTest {
     function _truncate(bytes memory b, uint256 len) internal pure returns (bytes memory) {
         require(b.length >= len, "_truncate: too short");
         bytes memory out = new bytes(len);
-        for (uint256 i = 0; i < len; i++) out[i] = b[i];
+        for (uint256 i = 0; i < len; i++) {
+            out[i] = b[i];
+        }
         return out;
     }
 }

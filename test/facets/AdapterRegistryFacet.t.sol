@@ -15,14 +15,10 @@ import {IAdmin} from "src/interfaces/IAdmin.sol";
 ///         deployed diamond + dstack adapter init seed (1 attestation,
 ///         1 KMS).
 contract AdapterRegistryFacetTest is DiamondSmokeTest {
-    bytes32 internal constant EXTRA_ATTEST_A =
-        0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1;
-    bytes32 internal constant EXTRA_ATTEST_B =
-        0xa2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2;
-    bytes32 internal constant EXTRA_KMS_A =
-        0xb1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1;
-    bytes32 internal constant EXTRA_KMS_B =
-        0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2;
+    bytes32 internal constant EXTRA_ATTEST_A = 0xa1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1;
+    bytes32 internal constant EXTRA_ATTEST_B = 0xa2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2;
+    bytes32 internal constant EXTRA_KMS_A = 0xb1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1;
+    bytes32 internal constant EXTRA_KMS_B = 0xb2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2;
 
     address internal extraFacetA = address(0xFA1);
     address internal extraFacetB = address(0xFA2);
@@ -116,11 +112,7 @@ contract AdapterRegistryFacetTest is DiamondSmokeTest {
 
     function test_defaultKmsId_returnsInitValue() public {
         _buildDiamond();
-        assertEq(
-            IAdapterRegistry(address(diamond)).defaultKmsId(),
-            DSTACK_KMS_ID,
-            "default kms id from init"
-        );
+        assertEq(IAdapterRegistry(address(diamond)).defaultKmsId(), DSTACK_KMS_ID, "default kms id from init");
     }
 
     function test_attestationFacet_returnsRegisteredAddress() public {
@@ -128,15 +120,9 @@ contract AdapterRegistryFacetTest is DiamondSmokeTest {
         IAdapterRegistry reg = IAdapterRegistry(address(diamond));
 
         assertEq(
-            reg.attestationFacet(DSTACK_ATTESTATION_ID),
-            address(dstackAttestationFacet),
-            "init-seeded facet pointer"
+            reg.attestationFacet(DSTACK_ATTESTATION_ID), address(dstackAttestationFacet), "init-seeded facet pointer"
         );
-        assertEq(
-            reg.attestationFacet(EXTRA_ATTEST_A),
-            address(0),
-            "unregistered is zero"
-        );
+        assertEq(reg.attestationFacet(EXTRA_ATTEST_A), address(0), "unregistered is zero");
 
         IAdmin(address(diamond)).registerAttestationAdapter(EXTRA_ATTEST_A, extraFacetA);
         assertEq(reg.attestationFacet(EXTRA_ATTEST_A), extraFacetA, "after register");
@@ -146,11 +132,7 @@ contract AdapterRegistryFacetTest is DiamondSmokeTest {
         _buildDiamond();
         IAdapterRegistry reg = IAdapterRegistry(address(diamond));
 
-        assertEq(
-            reg.kmsFacet(DSTACK_KMS_ID),
-            address(dstackKmsFacet),
-            "init-seeded kms facet pointer"
-        );
+        assertEq(reg.kmsFacet(DSTACK_KMS_ID), address(dstackKmsFacet), "init-seeded kms facet pointer");
         assertEq(reg.kmsFacet(EXTRA_KMS_A), address(0), "unregistered is zero");
 
         IAdmin(address(diamond)).registerKmsAdapter(EXTRA_KMS_A, extraFacetA);

@@ -22,10 +22,7 @@ interface IClusterViewFull {
     function allowedComposeHashes(bytes32) external view returns (bool);
     function allowedDeviceIds(bytes32) external view returns (bool);
     function allowAnyDevice() external view returns (bool);
-    function authorizedSigners(address)
-        external
-        view
-        returns (uint8 permissions, bool active, uint256 authorizedAt);
+    function authorizedSigners(address) external view returns (uint8 permissions, bool active, uint256 authorizedAt);
     function isSignerAuthorized(address, uint8) external view returns (bool);
 }
 
@@ -36,10 +33,8 @@ interface IClusterViewFull {
 ///         and fail directions to lock down the `permissions & required
 ///         == required` semantics.
 contract ViewFacetTest is DiamondSmokeTest {
-    bytes32 internal constant LOCAL_HASH =
-        0x4444444444444444444444444444444444444444444444444444444444444444;
-    bytes32 internal constant LOCAL_DEVICE =
-        0x5555555555555555555555555555555555555555555555555555555555555555;
+    bytes32 internal constant LOCAL_HASH = 0x4444444444444444444444444444444444444444444444444444444444444444;
+    bytes32 internal constant LOCAL_DEVICE = 0x5555555555555555555555555555555555555555555555555555555555555555;
 
     address internal localSigner = address(0xC0DE);
 
@@ -73,11 +68,8 @@ contract ViewFacetTest is DiamondSmokeTest {
     function test_memberRetiredAt_returnsZero_thenTimestampAfterRetire() public {
         _buildDiamond();
         IDstackKmsAdapter(address(diamond)).dstack_kms_setKms(address(mockKms));
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         // The smoke-test `createMember` flow does NOT execute the full
         // `register` path (which is what writes `members[memberId]`),
@@ -178,19 +170,11 @@ contract ViewFacetTest is DiamondSmokeTest {
         assertEq(_v().nextMemberSeq(), 0, "seq starts at 0");
 
         // First default-salt mint: uses seq=0, post-increments to 1.
-        ICore(address(diamond)).createMember(
-            bytes32(0),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        ICore(address(diamond)).createMember(bytes32(0), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         assertEq(_v().nextMemberSeq(), 1, "seq goes to 1 after first default-salt mint");
 
         // Second default-salt mint: uses seq=1, post-increments to 2.
-        ICore(address(diamond)).createMember(
-            bytes32(0),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        ICore(address(diamond)).createMember(bytes32(0), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         assertEq(_v().nextMemberSeq(), 2, "seq goes to 2 after second default-salt mint");
     }
 

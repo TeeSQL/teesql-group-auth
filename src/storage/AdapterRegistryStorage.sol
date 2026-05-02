@@ -25,8 +25,7 @@ library AdapterRegistryStorage {
         bytes32[] kmsIds;
     }
 
-    bytes32 internal constant SLOT =
-        0x6ee2bb1ae478bac7e8c2d1f0e58e1f7a1636fb53a7bc4fcbf96fa7b68f3afb00;
+    bytes32 internal constant SLOT = 0x6ee2bb1ae478bac7e8c2d1f0e58e1f7a1636fb53a7bc4fcbf96fa7b68f3afb00;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

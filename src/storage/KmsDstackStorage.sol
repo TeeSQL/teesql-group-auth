@@ -12,8 +12,7 @@ library KmsDstackStorage {
         mapping(address => bool) allowedKmsRoots; // sig-chain trust anchors
     }
 
-    bytes32 internal constant SLOT =
-        0x0a600982a64d34a5ac3f1d20f4d5803cd76af3217f9a5da226acbf0cb783a200;
+    bytes32 internal constant SLOT = 0x0a600982a64d34a5ac3f1d20f4d5803cd76af3217f9a5da226acbf0cb783a200;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

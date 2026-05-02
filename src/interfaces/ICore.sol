@@ -31,16 +31,10 @@ interface ICore {
 
     // --- Events ---
     event MemberPassthroughCreated(
-        address indexed passthrough,
-        bytes32 indexed salt,
-        bytes32 indexed attestationId,
-        bytes32 kmsId
+        address indexed passthrough, bytes32 indexed salt, bytes32 indexed attestationId, bytes32 kmsId
     );
     event MemberRegistered(
-        bytes32 indexed memberId,
-        address indexed instanceId,
-        address indexed passthrough,
-        string dnsLabel
+        bytes32 indexed memberId, address indexed instanceId, address indexed passthrough, string dnsLabel
     );
     event InstanceBindingVerified(bytes32 indexed memberId, address indexed instanceId);
     event LeaderClaimed(bytes32 indexed memberId, uint256 indexed epoch, bytes endpoint);
@@ -81,21 +75,15 @@ interface ICore {
     function getOnboarding(bytes32 id) external view returns (CoreStorage.OnboardMsg[] memory);
 
     // --- Leader ---
-    function claimLeader(
-        CallAuth calldata auth,
-        bytes calldata newEndpoint,
-        Witness[] calldata witnesses
-    ) external;
+    function claimLeader(CallAuth calldata auth, bytes calldata newEndpoint, Witness[] calldata witnesses) external;
     function updateEndpoint(CallAuth calldata auth, bytes calldata newEndpoint) external;
     function updatePublicEndpoint(CallAuth calldata auth, bytes calldata newPublicEndpoint) external;
     function currentLeader() external view returns (CoreStorage.Member memory);
     function leaderLease() external view returns (bytes32 memberId, uint256 epoch);
 
     // --- Factory orchestration ---
-    function createMember(bytes32 salt, bytes32 attestationId, bytes32 kmsId)
-        external returns (address passthrough);
-    function predictMember(bytes32 salt, bytes32 attestationId)
-        external view returns (address);
+    function createMember(bytes32 salt, bytes32 attestationId, bytes32 kmsId) external returns (address passthrough);
+    function predictMember(bytes32 salt, bytes32 attestationId) external view returns (address);
     function isOurPassthrough(address passthrough) external view returns (bool);
 
     // --- Per-call auth message helpers ---
@@ -105,17 +93,14 @@ interface ICore {
         bytes calldata publicEndpoint,
         string calldata dnsLabel
     ) external view returns (bytes32);
-    function callMessage(
-        bytes32 memberId,
-        uint256 nonce,
-        bytes4 selector,
-        bytes memory args
-    ) external view returns (bytes32);
-    function witnessMessage(
-        bytes32 deposedMemberId,
-        uint256 deposedEpoch,
-        bytes32 voucherMemberId
-    ) external view returns (bytes32);
+    function callMessage(bytes32 memberId, uint256 nonce, bytes4 selector, bytes memory args)
+        external
+        view
+        returns (bytes32);
+    function witnessMessage(bytes32 deposedMemberId, uint256 deposedEpoch, bytes32 voucherMemberId)
+        external
+        view
+        returns (bytes32);
 
     // clusterId(), destroy(), retireMember() are part of the cluster ABI but
     // live on ViewFacet (read surface) and AdminFacet (owner-gated lifecycle)

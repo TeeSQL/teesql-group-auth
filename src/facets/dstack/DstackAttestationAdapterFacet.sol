@@ -15,8 +15,7 @@ import {AttestationDstackStorage} from "../../storage/AttestationDstackStorage.s
 ///         Adapter id pinned in spec §19.1.
 contract DstackAttestationAdapterFacet is IDstackAttestationAdapter {
     /// @notice keccak256("teesql.attestation.dstack") — pinned in spec §19.1.
-    bytes32 public constant DSTACK_ATTESTATION_ID =
-        0x33a9d6b17861ebd35aca9a68779e7b913c04060dc2f6ab672d9f190a13924d80;
+    bytes32 public constant DSTACK_ATTESTATION_ID = 0x33a9d6b17861ebd35aca9a68779e7b913c04060dc2f6ab672d9f190a13924d80;
 
     /// @notice keccak256("UpToDate") — precomputed for cheap tcbStatus comparison.
     bytes32 private constant UP_TO_DATE_HASH = keccak256(bytes("UpToDate"));
@@ -47,8 +46,7 @@ contract DstackAttestationAdapterFacet is IDstackAttestationAdapter {
         override
         returns (bool ok, string memory reason)
     {
-        (bool ok1, string memory r1) =
-            IBootGate(address(this)).clusterBootPolicy(b.appId, b.composeHash, b.deviceId);
+        (bool ok1, string memory r1) = IBootGate(address(this)).clusterBootPolicy(b.appId, b.composeHash, b.deviceId);
         if (!ok1) {
             return (false, r1);
         }
@@ -62,7 +60,13 @@ contract DstackAttestationAdapterFacet is IDstackAttestationAdapter {
         return (true, "");
     }
 
-    function dstack_onMemberMinted(address /* passthrough */) external pure override {
+    function dstack_onMemberMinted(
+        address /* passthrough */
+    )
+        external
+        pure
+        override
+    {
         // No-op for the dstack runtime today. Selector exists for symmetry
         // with future runtimes that may need a runtime-side mint hook
         // (e.g., to register a per-CVM quote with a runtime-local registry).

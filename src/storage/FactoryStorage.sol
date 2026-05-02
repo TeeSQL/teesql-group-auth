@@ -20,8 +20,7 @@ library FactoryStorage {
         mapping(address => bool) deployedMembers;
     }
 
-    bytes32 internal constant SLOT =
-        0xc7ca5b180fe1e18defad477f0b08739bf72851d8efc9aa269b38f4d8139d4e00;
+    bytes32 internal constant SLOT = 0xc7ca5b180fe1e18defad477f0b08739bf72851d8efc9aa269b38f4d8139d4e00;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

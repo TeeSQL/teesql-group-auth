@@ -64,15 +64,8 @@ contract SpecConstantsTest is Test {
     function test_specRowsMatchSource() public view {
         for (uint256 i = 0; i < _count; i++) {
             (bool found, bytes32 sourceValue) = _lookupSource(_names[i]);
-            assertTrue(
-                found,
-                string.concat("spec row missing from source lookup table: ", _names[i])
-            );
-            assertEq(
-                _slots[i],
-                sourceValue,
-                string.concat("spec/source mismatch for: ", _names[i])
-            );
+            assertTrue(found, string.concat("spec row missing from source lookup table: ", _names[i]));
+            assertEq(_slots[i], sourceValue, string.concat("spec/source mismatch for: ", _names[i]));
         }
     }
 
@@ -82,15 +75,8 @@ contract SpecConstantsTest is Test {
     function test_sourceRowsAppearInSpec() public view {
         for (uint256 i = 0; i < _sourceCount; i++) {
             (bool found, bytes32 specValue) = _lookupSpec(_sourceNames[i]);
-            assertTrue(
-                found,
-                string.concat("source constant missing from spec table: ", _sourceNames[i])
-            );
-            assertEq(
-                _sourceValues[i],
-                specValue,
-                string.concat("source/spec mismatch for: ", _sourceNames[i])
-            );
+            assertTrue(found, string.concat("source constant missing from spec table: ", _sourceNames[i]));
+            assertEq(_sourceValues[i], specValue, string.concat("source/spec mismatch for: ", _sourceNames[i]));
         }
     }
 
@@ -212,12 +198,7 @@ contract SpecConstantsTest is Test {
     /// @dev If we're in table mode, attempt to extract a (name, bytes32) row
     ///      from the line. Header / divider / blank / non-table lines are
     ///      silently ignored.
-    function _processLine(
-        bytes memory data,
-        uint256 start,
-        uint256 end,
-        uint8 mode
-    ) internal {
+    function _processLine(bytes memory data, uint256 start, uint256 end, uint8 mode) internal {
         if (mode != 1 && mode != 2) {
             return;
         }
@@ -274,12 +255,11 @@ contract SpecConstantsTest is Test {
         else if (mode == 2) _count19_2++;
     }
 
-    function _lineHasPrefix(
-        bytes memory data,
-        uint256 start,
-        uint256 end,
-        string memory prefix
-    ) internal pure returns (bool) {
+    function _lineHasPrefix(bytes memory data, uint256 start, uint256 end, string memory prefix)
+        internal
+        pure
+        returns (bool)
+    {
         bytes memory p = bytes(prefix);
         if (end - start < p.length) return false;
         for (uint256 k = 0; k < p.length; k++) {
@@ -288,11 +268,7 @@ contract SpecConstantsTest is Test {
         return true;
     }
 
-    function _slice(
-        bytes memory data,
-        uint256 start,
-        uint256 end
-    ) internal pure returns (string memory) {
+    function _slice(bytes memory data, uint256 start, uint256 end) internal pure returns (string memory) {
         bytes memory out = new bytes(end - start);
         for (uint256 k = 0; k < out.length; k++) {
             out[k] = data[start + k];

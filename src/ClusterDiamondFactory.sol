@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {IDiamondWritableInternal} from
-    "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
+import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
 
 import {IClusterDiamondFactory} from "./interfaces/IClusterDiamondFactory.sol";
 import {ClusterDiamond} from "./diamond/ClusterDiamond.sol";

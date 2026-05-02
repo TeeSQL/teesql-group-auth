@@ -66,11 +66,7 @@ contract ClusterDiamond is SolidStateDiamond {
     /// the call below land, so `_diamondCut` sees a fully-initialized
     /// diamond and the `target.delegatecall(data)` inside `_initialize`
     /// runs in the diamond's own storage context.
-    constructor(
-        FacetCut[] memory facetCuts,
-        address init,
-        bytes memory initCalldata
-    ) SolidStateDiamond() {
+    constructor(FacetCut[] memory facetCuts, address init, bytes memory initCalldata) SolidStateDiamond() {
         _diamondCut(facetCuts, init, initCalldata);
     }
 }

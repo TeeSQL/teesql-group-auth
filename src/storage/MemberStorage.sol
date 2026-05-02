@@ -14,8 +14,7 @@ library MemberStorage {
         address cluster;
     }
 
-    bytes32 internal constant SLOT =
-        0x48806f0bd1843d40ee54b27b1aa46bd5d77ad5ef1d133812b356f098b9410500;
+    bytes32 internal constant SLOT = 0x48806f0bd1843d40ee54b27b1aa46bd5d77ad5ef1d133812b356f098b9410500;
 
     function layout() internal pure returns (Layout storage l) {
         bytes32 slot = SLOT;

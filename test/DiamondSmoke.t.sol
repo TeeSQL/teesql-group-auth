@@ -3,12 +3,9 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
-import {IDiamondWritableInternal} from
-    "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
-import {IDiamondReadable} from
-    "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
-import {IERC2535DiamondCutInternal} from
-    "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
+import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
+import {IDiamondReadable} from "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
+import {IERC2535DiamondCutInternal} from "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
 
 import {ClusterDiamond} from "src/diamond/ClusterDiamond.sol";
 import {DiamondInit} from "src/diamond/DiamondInit.sol";
@@ -126,11 +123,9 @@ interface IClusterView {
 contract DiamondSmokeTest is Test {
     bytes32 internal constant DSTACK_ATTESTATION_ID =
         0x33a9d6b17861ebd35aca9a68779e7b913c04060dc2f6ab672d9f190a13924d80;
-    bytes32 internal constant DSTACK_KMS_ID =
-        0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
+    bytes32 internal constant DSTACK_KMS_ID = 0xea3b7f2cbbf5315c63b218799434c030d178fb226a363f7a57c82e25ccff0fd7;
 
-    bytes32 internal constant SOME_HASH =
-        0x1111111111111111111111111111111111111111111111111111111111111111;
+    bytes32 internal constant SOME_HASH = 0x1111111111111111111111111111111111111111111111111111111111111111;
 
     // Chain singletons
     DstackMember internal dstackMemberImpl;
@@ -192,11 +187,7 @@ contract DiamondSmokeTest is Test {
 
     function test_02_factoryAcceptsDstackRuntime() public {
         factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(dstackMemberImpl));
-        assertEq(
-            factory.memberImpl(DSTACK_ATTESTATION_ID),
-            address(dstackMemberImpl),
-            "memberImpl mapping"
-        );
+        assertEq(factory.memberImpl(DSTACK_ATTESTATION_ID), address(dstackMemberImpl), "memberImpl mapping");
     }
 
     // ─── 3-7: Build the diamond (shared in _buildDiamond) and assert everything ──
@@ -204,8 +195,7 @@ contract DiamondSmokeTest is Test {
     function test_03_diamondBuildsAndLoupeReturnsAllFacets() public {
         _buildDiamond();
 
-        IDiamondReadable.Facet[] memory facets =
-            IDiamondReadable(address(diamond)).facets();
+        IDiamondReadable.Facet[] memory facets = IDiamondReadable(address(diamond)).facets();
 
         // Application facets we explicitly added (7) + the SolidStateDiamond
         // built-in self-facet (registers the loupe + diamondCut + ERC165 +
@@ -274,10 +264,7 @@ contract DiamondSmokeTest is Test {
         _buildDiamond();
 
         assertEq(IAdmin(address(diamond)).clusterVersion(), 4, "clusterVersion");
-        assertTrue(
-            IAdmin(address(diamond)).facetBundleHash() != bytes32(0),
-            "facetBundleHash non-zero"
-        );
+        assertTrue(IAdmin(address(diamond)).facetBundleHash() != bytes32(0), "facetBundleHash non-zero");
     }
 
     function test_05_adapterRegistryViewsResolve() public {
@@ -286,16 +273,8 @@ contract DiamondSmokeTest is Test {
         IAdapterRegistry reg = IAdapterRegistry(address(diamond));
         assertEq(reg.defaultAttestationId(), DSTACK_ATTESTATION_ID, "default attest");
         assertEq(reg.defaultKmsId(), DSTACK_KMS_ID, "default kms");
-        assertEq(
-            reg.attestationFacet(DSTACK_ATTESTATION_ID),
-            address(dstackAttestationFacet),
-            "attest facet pointer"
-        );
-        assertEq(
-            reg.kmsFacet(DSTACK_KMS_ID),
-            address(dstackKmsFacet),
-            "kms facet pointer"
-        );
+        assertEq(reg.attestationFacet(DSTACK_ATTESTATION_ID), address(dstackAttestationFacet), "attest facet pointer");
+        assertEq(reg.kmsFacet(DSTACK_KMS_ID), address(dstackKmsFacet), "kms facet pointer");
         assertTrue(reg.attestationRegistered(DSTACK_ATTESTATION_ID), "attest registered");
         assertTrue(reg.kmsRegistered(DSTACK_KMS_ID), "kms registered");
     }
@@ -304,24 +283,13 @@ contract DiamondSmokeTest is Test {
         _buildDiamond();
 
         IAdmin(address(diamond)).addComposeHash(SOME_HASH);
-        assertTrue(
-            IClusterView(address(diamond)).allowedComposeHashes(SOME_HASH),
-            "compose hash added"
-        );
+        assertTrue(IClusterView(address(diamond)).allowedComposeHashes(SOME_HASH), "compose hash added");
     }
 
     function test_07_clusterIdSet() public {
         _buildDiamond();
-        assertEq(
-            IClusterView(address(diamond)).clusterId(),
-            "test-cluster",
-            "cluster id"
-        );
-        assertEq(
-            IClusterView(address(diamond)).factory(),
-            address(factory),
-            "factory pointer"
-        );
+        assertEq(IClusterView(address(diamond)).clusterId(), "test-cluster", "cluster id");
+        assertEq(IClusterView(address(diamond)).factory(), address(factory), "factory pointer");
     }
 
     // ─── 8. createMember happy path ────────────────────────────────────────
@@ -330,11 +298,8 @@ contract DiamondSmokeTest is Test {
         _buildDiamond();
         IDstackKmsAdapter(address(diamond)).dstack_kms_setKms(address(mockKms));
 
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         assertTrue(passthrough != address(0));
         assertTrue(ICore(address(diamond)).isOurPassthrough(passthrough));
 
@@ -350,11 +315,8 @@ contract DiamondSmokeTest is Test {
     function test_09_memberProxyIsDstackMember() public {
         _buildDiamond();
         IDstackKmsAdapter(address(diamond)).dstack_kms_setKms(address(mockKms));
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         assertEq(DstackMember(passthrough).cluster(), address(diamond));
     }
 
@@ -364,11 +326,8 @@ contract DiamondSmokeTest is Test {
         IAdmin(address(diamond)).setAllowAnyDevice(true);
         IAdmin(address(diamond)).addComposeHash(SOME_HASH);
 
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID,
-            DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         IAppAuth.AppBootInfo memory b = IAppAuth.AppBootInfo({
             appId: passthrough,
@@ -397,8 +356,7 @@ contract DiamondSmokeTest is Test {
             factory.setMemberImpl(DSTACK_ATTESTATION_ID, address(dstackMemberImpl));
         }
 
-        IERC2535DiamondCutInternal.FacetCut[] memory facetCuts =
-            new IERC2535DiamondCutInternal.FacetCut[](7);
+        IERC2535DiamondCutInternal.FacetCut[] memory facetCuts = new IERC2535DiamondCutInternal.FacetCut[](7);
 
         facetCuts[0] = IERC2535DiamondCutInternal.FacetCut({
             target: address(coreFacet),
@@ -452,11 +410,7 @@ contract DiamondSmokeTest is Test {
             dstackKmsFacet: address(dstackKmsFacet)
         });
 
-        diamond = new ClusterDiamond(
-            facetCuts,
-            address(diamondInit),
-            abi.encodeCall(DiamondInit.init, (initArgs))
-        );
+        diamond = new ClusterDiamond(facetCuts, address(diamondInit), abi.encodeCall(DiamondInit.init, (initArgs)));
     }
 
     function _kmsRoots() internal view returns (address[] memory roots) {
@@ -465,16 +419,14 @@ contract DiamondSmokeTest is Test {
     }
 
     function _expectedAppSelectorCount() internal pure returns (uint256) {
-        return _coreSelectorsLen()
-            + _adminSelectorsLen()
-            + _adapterRegistrySelectorsLen()
-            + _bootGateSelectorsLen()
-            + _viewSelectorsLen()
-            + _dstackAttestationSelectorsLen()
-            + _dstackKmsSelectorsLen();
+        return _coreSelectorsLen() + _adminSelectorsLen() + _adapterRegistrySelectorsLen() + _bootGateSelectorsLen()
+            + _viewSelectorsLen() + _dstackAttestationSelectorsLen() + _dstackKmsSelectorsLen();
     }
 
-    function _coreSelectorsLen() internal pure returns (uint256) { return 19; }
+    function _coreSelectorsLen() internal pure returns (uint256) {
+        return 19;
+    }
+
     /// @dev 28 published in `forge inspect` minus 3 selectors that collide with
     ///      `SolidStateDiamond`'s pre-registered SafeOwnable surface
     ///      (`owner()`, `transferOwnership(address)`, `acceptOwnership()`).
@@ -485,25 +437,42 @@ contract DiamondSmokeTest is Test {
     ///      external call surface unifies the two, so dropping the 3
     ///      selectors at cut time is the only path that gets the diamond
     ///      built. AdminFacet's other selectors still reach `CoreStorage`.
-    function _adminSelectorsLen() internal pure returns (uint256) { return 24; }
-    function _adapterRegistrySelectorsLen() internal pure returns (uint256) { return 10; }
-    function _bootGateSelectorsLen() internal pure returns (uint256) { return 1; }
-    function _viewSelectorsLen() internal pure returns (uint256) { return 11; }
-    function _dstackAttestationSelectorsLen() internal pure returns (uint256) { return 7; }
-    function _dstackKmsSelectorsLen() internal pure returns (uint256) { return 10; }
+    function _adminSelectorsLen() internal pure returns (uint256) {
+        return 24;
+    }
+
+    function _adapterRegistrySelectorsLen() internal pure returns (uint256) {
+        return 10;
+    }
+
+    function _bootGateSelectorsLen() internal pure returns (uint256) {
+        return 1;
+    }
+
+    function _viewSelectorsLen() internal pure returns (uint256) {
+        return 11;
+    }
+
+    function _dstackAttestationSelectorsLen() internal pure returns (uint256) {
+        return 7;
+    }
+
+    function _dstackKmsSelectorsLen() internal pure returns (uint256) {
+        return 10;
+    }
 
     function _coreSelectors() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](19);
-        s[0]  = CoreFacet.callMessage.selector;
-        s[1]  = CoreFacet.claimLeader.selector;
-        s[2]  = CoreFacet.createMember.selector;
-        s[3]  = CoreFacet.currentLeader.selector;
-        s[4]  = CoreFacet.derivedToMember.selector;
-        s[5]  = CoreFacet.getMember.selector;
-        s[6]  = CoreFacet.getOnboarding.selector;
-        s[7]  = CoreFacet.instanceToMember.selector;
-        s[8]  = CoreFacet.isOurPassthrough.selector;
-        s[9]  = CoreFacet.leaderLease.selector;
+        s[0] = CoreFacet.callMessage.selector;
+        s[1] = CoreFacet.claimLeader.selector;
+        s[2] = CoreFacet.createMember.selector;
+        s[3] = CoreFacet.currentLeader.selector;
+        s[4] = CoreFacet.derivedToMember.selector;
+        s[5] = CoreFacet.getMember.selector;
+        s[6] = CoreFacet.getOnboarding.selector;
+        s[7] = CoreFacet.instanceToMember.selector;
+        s[8] = CoreFacet.isOurPassthrough.selector;
+        s[9] = CoreFacet.leaderLease.selector;
         s[10] = CoreFacet.memberNonce.selector;
         s[11] = CoreFacet.onboard.selector;
         s[12] = CoreFacet.passthroughToMember.selector;
@@ -525,16 +494,16 @@ contract DiamondSmokeTest is Test {
         // OwnableStorage slot for `requireOwner`, so all auth checks across
         // facets agree on a single source of truth.
         s = new bytes4[](24);
-        s[0]  = AdminFacet.addComposeHash.selector;
-        s[1]  = AdminFacet.addDevice.selector;
-        s[2]  = AdminFacet.authorizeSigner.selector;
-        s[3]  = AdminFacet.clusterVersion.selector;
-        s[4]  = AdminFacet.deregisterAttestationAdapter.selector;
-        s[5]  = AdminFacet.deregisterKmsAdapter.selector;
-        s[6]  = AdminFacet.destroy.selector;
-        s[7]  = AdminFacet.facetBundleHash.selector;
-        s[8]  = AdminFacet.pause.selector;
-        s[9]  = AdminFacet.paused.selector;
+        s[0] = AdminFacet.addComposeHash.selector;
+        s[1] = AdminFacet.addDevice.selector;
+        s[2] = AdminFacet.authorizeSigner.selector;
+        s[3] = AdminFacet.clusterVersion.selector;
+        s[4] = AdminFacet.deregisterAttestationAdapter.selector;
+        s[5] = AdminFacet.deregisterKmsAdapter.selector;
+        s[6] = AdminFacet.destroy.selector;
+        s[7] = AdminFacet.facetBundleHash.selector;
+        s[8] = AdminFacet.pause.selector;
+        s[9] = AdminFacet.paused.selector;
         s[10] = AdminFacet.pauser.selector;
         s[11] = AdminFacet.registerAttestationAdapter.selector;
         s[12] = AdminFacet.registerKmsAdapter.selector;
@@ -572,16 +541,16 @@ contract DiamondSmokeTest is Test {
 
     function _viewSelectors() internal pure returns (bytes4[] memory s) {
         s = new bytes4[](11);
-        s[0]  = ViewFacet.allowAnyDevice.selector;
-        s[1]  = ViewFacet.allowedComposeHashes.selector;
-        s[2]  = ViewFacet.allowedDeviceIds.selector;
-        s[3]  = ViewFacet.authorizedSigners.selector;
-        s[4]  = ViewFacet.clusterId.selector;
-        s[5]  = ViewFacet.destroyed.selector;
-        s[6]  = ViewFacet.destroyedAt.selector;
-        s[7]  = ViewFacet.factory.selector;
-        s[8]  = ViewFacet.isSignerAuthorized.selector;
-        s[9]  = ViewFacet.memberRetiredAt.selector;
+        s[0] = ViewFacet.allowAnyDevice.selector;
+        s[1] = ViewFacet.allowedComposeHashes.selector;
+        s[2] = ViewFacet.allowedDeviceIds.selector;
+        s[3] = ViewFacet.authorizedSigners.selector;
+        s[4] = ViewFacet.clusterId.selector;
+        s[5] = ViewFacet.destroyed.selector;
+        s[6] = ViewFacet.destroyedAt.selector;
+        s[7] = ViewFacet.factory.selector;
+        s[8] = ViewFacet.isSignerAuthorized.selector;
+        s[9] = ViewFacet.memberRetiredAt.selector;
         s[10] = ViewFacet.nextMemberSeq.selector;
     }
 

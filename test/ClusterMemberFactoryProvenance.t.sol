@@ -31,8 +31,7 @@ import {FactoryStorage} from "src/storage/FactoryStorage.sol";
 /// the same factory the rest of the suite uses keeps the verification
 /// realistic.
 contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
-    bytes32 internal constant SOME_SALT =
-        bytes32(uint256(0xABCDEF));
+    bytes32 internal constant SOME_SALT = bytes32(uint256(0xABCDEF));
 
     address internal stranger = address(0xBEEF);
 
@@ -56,15 +55,8 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// of ours?" before any factory write happens.
     function test_isDeployedMember_returnsFalseBeforeDeploy() public {
         _registerDstackImpl();
-        address predicted = factory.predict(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
-        assertFalse(
-            factory.isDeployedMember(predicted),
-            "pre-deploy address must register as false"
-        );
+        address predicted = factory.predict(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
+        assertFalse(factory.isDeployedMember(predicted), "pre-deploy address must register as false");
     }
 
     /// The minimum requirement: after `deployMember(...)`, the returned
@@ -72,15 +64,8 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// downstream webhook check rejects every legitimate UserOp.
     function test_deployMember_flipsDeployedMembersTrue() public {
         _registerDstackImpl();
-        address proxy = factory.deployMember(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
-        assertTrue(
-            factory.isDeployedMember(proxy),
-            "deployedMembers[proxy] must flip true on deploy"
-        );
+        address proxy = factory.deployMember(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
+        assertTrue(factory.isDeployedMember(proxy), "deployedMembers[proxy] must flip true on deploy");
     }
 
     /// THE load-bearing trust-anchor test for the webhook. A proxy with
@@ -89,20 +74,14 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// MUST NOT register as factory-deployed. The webhook trusts this
     /// property as the answer to "did our factory mint this member?";
     /// any false positive lets an attacker drain gas sponsorship.
-    function test_isDeployedMember_returnsFalseForExternallyDeployedProxy()
-        public
-    {
+    function test_isDeployedMember_returnsFalseForExternallyDeployedProxy() public {
         _registerDstackImpl();
 
         // Construct an ERC1967Proxy DIRECTLY - same impl, same init data
         // shape, same bytecode. The factory has no idea about this
         // deployment.
-        bytes memory initData = abi.encodeCall(
-            IMemberInit.initialize,
-            (FAKE_CLUSTER)
-        );
-        ERC1967Proxy externalProxy =
-            new ERC1967Proxy(address(dstackMemberImpl), initData);
+        bytes memory initData = abi.encodeCall(IMemberInit.initialize, (FAKE_CLUSTER));
+        ERC1967Proxy externalProxy = new ERC1967Proxy(address(dstackMemberImpl), initData);
 
         assertFalse(
             factory.isDeployedMember(address(externalProxy)),
@@ -124,11 +103,7 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// the factory after a deploy keeps the bit pinned to true.
     function test_deployedMembers_isSetOnly() public {
         _registerDstackImpl();
-        address proxy = factory.deployMember(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
+        address proxy = factory.deployMember(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
         assertTrue(factory.isDeployedMember(proxy), "set after deploy");
 
         // Pure reads - none of these should mutate the bit.
@@ -155,16 +130,9 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
         factory.acceptAdmin();
 
         // Another deploy with a different salt mustn't touch the prior bit.
-        factory.deployMember(
-            FAKE_CLUSTER,
-            bytes32(uint256(99)),
-            DSTACK_ATTESTATION_ID
-        );
+        factory.deployMember(FAKE_CLUSTER, bytes32(uint256(99)), DSTACK_ATTESTATION_ID);
 
-        assertTrue(
-            factory.isDeployedMember(proxy),
-            "bit cleared by some factory function: invariant broken"
-        );
+        assertTrue(factory.isDeployedMember(proxy), "bit cleared by some factory function: invariant broken");
     }
 
     /// A genuinely random address (no contract there at all) registers as
@@ -172,38 +140,21 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// branch and the factory doesn't accidentally treat unknown addresses
     /// as authorized.
     function test_isDeployedMember_returnsFalseForRandomAddress() public view {
-        assertFalse(
-            factory.isDeployedMember(address(0xDEAD)),
-            "random address must register as false"
-        );
-        assertFalse(
-            factory.isDeployedMember(address(0)),
-            "address(0) must register as false"
-        );
-        assertFalse(
-            factory.isDeployedMember(stranger),
-            "EOA must register as false"
-        );
+        assertFalse(factory.isDeployedMember(address(0xDEAD)), "random address must register as false");
+        assertFalse(factory.isDeployedMember(address(0)), "address(0) must register as false");
+        assertFalse(factory.isDeployedMember(stranger), "EOA must register as false");
     }
 
     /// The atomic `deployMemberWithExpectedImpl` variant flows into
     /// `deployMember` via `return deployMember(...)`, so the writer line
     /// fires regardless of which entrypoint is used. Verify both paths
     /// land the bit so the webhook never has to discriminate by entrypoint.
-    function test_deployMember_via_deployMemberWithExpectedImpl_alsoFlipsTrue()
-        public
-    {
+    function test_deployMember_via_deployMemberWithExpectedImpl_alsoFlipsTrue() public {
         _registerDstackImpl();
         address proxy = factory.deployMemberWithExpectedImpl(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID,
-            address(dstackMemberImpl)
+            FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID, address(dstackMemberImpl)
         );
-        assertTrue(
-            factory.isDeployedMember(proxy),
-            "atomic-variant deploy must also flip the bit"
-        );
+        assertTrue(factory.isDeployedMember(proxy), "atomic-variant deploy must also flip the bit");
     }
 
     /// Across multiple deploys, every previously-deployed proxy stays
@@ -214,28 +165,14 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
         _registerDstackImpl();
         address[] memory proxies = new address[](3);
         for (uint256 i = 0; i < 3; i++) {
-            proxies[i] = factory.deployMember(
-                FAKE_CLUSTER,
-                bytes32(uint256(i)),
-                DSTACK_ATTESTATION_ID
-            );
-            assertTrue(
-                factory.isDeployedMember(proxies[i]),
-                "freshly-deployed must register true"
-            );
+            proxies[i] = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(i)), DSTACK_ATTESTATION_ID);
+            assertTrue(factory.isDeployedMember(proxies[i]), "freshly-deployed must register true");
         }
         // Deploy a 4th and confirm the prior 3 are still true.
-        address fourth = factory.deployMember(
-            FAKE_CLUSTER,
-            bytes32(uint256(99)),
-            DSTACK_ATTESTATION_ID
-        );
+        address fourth = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(99)), DSTACK_ATTESTATION_ID);
         assertTrue(factory.isDeployedMember(fourth), "4th true");
         for (uint256 i = 0; i < 3; i++) {
-            assertTrue(
-                factory.isDeployedMember(proxies[i]),
-                "prior deploy bit cleared by subsequent deploy"
-            );
+            assertTrue(factory.isDeployedMember(proxies[i]), "prior deploy bit cleared by subsequent deploy");
         }
     }
 
@@ -252,11 +189,7 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// catches it before the webhook's eth_call returns garbage.
     function test_deployedMembersStorage_layout_isAppendOnly() public {
         _registerDstackImpl();
-        address proxy = factory.deployMember(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
+        address proxy = factory.deployMember(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
 
         // Compute the storage slot the writer SHOULD have hit. The mapping
         // base slot is `FactoryStorage.SLOT + 4` (4 = field index of
@@ -276,27 +209,16 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
         bytes32 expectedSlot = keccak256(abi.encode(proxy, deployedMembersBase));
 
         bytes32 stored = vm.load(address(factory), expectedSlot);
-        assertEq(
-            uint256(stored),
-            1,
-            "deployedMembers[proxy] should be 1 (true) at the expected slot"
-        );
+        assertEq(uint256(stored), 1, "deployedMembers[proxy] should be 1 (true) at the expected slot");
 
         // Defensive: the bit at the SAME slot derivation but using one of
         // the EARLIER field indices (e.g., index 3 = registeredAttestationIds
         // array element, or index 2 = memberImpl mapping for the proxy
         // address cast as bytes32) must NOT be 1 - otherwise the writer
         // is hitting the wrong slot and our reasoning above is wrong.
-        bytes32 wrongSlot3 = keccak256(abi.encode(
-            proxy,
-            bytes32(uint256(namespaceSlot) + 3)
-        ));
+        bytes32 wrongSlot3 = keccak256(abi.encode(proxy, bytes32(uint256(namespaceSlot) + 3)));
         bytes32 wrongStored3 = vm.load(address(factory), wrongSlot3);
-        assertEq(
-            uint256(wrongStored3),
-            0,
-            "field index 3 derivation must be empty - layout drift"
-        );
+        assertEq(uint256(wrongStored3), 0, "field index 3 derivation must be empty - layout drift");
     }
 
     // ── Defensive / belt-and-suspenders ────────────────────────────────────
@@ -308,26 +230,12 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     /// the cache keys agree across the predict/deploy boundary.)
     function test_isDeployedMember_landsAtPredictedAddress() public {
         _registerDstackImpl();
-        address predicted = factory.predict(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
-        assertFalse(
-            factory.isDeployedMember(predicted),
-            "predicted address starts false"
-        );
+        address predicted = factory.predict(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
+        assertFalse(factory.isDeployedMember(predicted), "predicted address starts false");
 
-        address actual = factory.deployMember(
-            FAKE_CLUSTER,
-            SOME_SALT,
-            DSTACK_ATTESTATION_ID
-        );
+        address actual = factory.deployMember(FAKE_CLUSTER, SOME_SALT, DSTACK_ATTESTATION_ID);
         assertEq(actual, predicted, "deploy lands at predict");
-        assertTrue(
-            factory.isDeployedMember(predicted),
-            "bit lands at the predicted address"
-        );
+        assertTrue(factory.isDeployedMember(predicted), "bit lands at the predicted address");
     }
 
     /// Multiple deploys against DIFFERENT runtimes (we'd need a second
@@ -340,22 +248,10 @@ contract ClusterMemberFactoryProvenanceTest is DiamondSmokeTest {
     function test_isDeployedMember_multipleDeploysAreIndependent() public {
         _registerDstackImpl();
 
-        address p1 = factory.deployMember(
-            FAKE_CLUSTER,
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID
-        );
-        address p2 = factory.deployMember(
-            FAKE_CLUSTER,
-            bytes32(uint256(2)),
-            DSTACK_ATTESTATION_ID
-        );
+        address p1 = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(1)), DSTACK_ATTESTATION_ID);
+        address p2 = factory.deployMember(FAKE_CLUSTER, bytes32(uint256(2)), DSTACK_ATTESTATION_ID);
         // Use a DIFFERENT cluster argument (the salt-mix changes too).
-        address p3 = factory.deployMember(
-            address(0xC1A6),
-            bytes32(uint256(1)),
-            DSTACK_ATTESTATION_ID
-        );
+        address p3 = factory.deployMember(address(0xC1A6), bytes32(uint256(1)), DSTACK_ATTESTATION_ID);
 
         assertTrue(p1 != p2, "different salts -> different addresses");
         assertTrue(p1 != p3, "different cluster -> different addresses");

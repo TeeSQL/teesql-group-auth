@@ -18,7 +18,9 @@ interface IDstackKmsAdapter {
     /// Sig-chain verification. Core calls this from register() with the
     /// dstack-shaped Proof ABI-encoded into bytes. Decodes internally.
     function dstack_kms_verifySigChain(bytes calldata proof)
-        external view returns (bytes32 codeId, bytes memory derivedPubkey);
+        external
+        view
+        returns (bytes32 codeId, bytes memory derivedPubkey);
 
     /// Mint hook — Core calls this from createMember(). dstack-KMS impl
     /// invokes IDstackKms(kms).registerApp(passthrough).

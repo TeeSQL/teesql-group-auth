@@ -50,12 +50,9 @@ contract DiamondInit {
     /// re-initialization for an added stateful facet — see spec §13.2).
     function init(InitArgs calldata args) external {
         if (
-            args.owner == address(0) ||
-            args.pauser == address(0) ||
-            args.factory == address(0) ||
-            args.dstackKms == address(0) ||
-            args.dstackAttestationFacet == address(0) ||
-            args.dstackKmsFacet == address(0)
+            args.owner == address(0) || args.pauser == address(0) || args.factory == address(0)
+                || args.dstackKms == address(0) || args.dstackAttestationFacet == address(0)
+                || args.dstackKmsFacet == address(0)
         ) revert ZeroAddress();
 
         // ── Cluster ownership ──────────────────────────────────────────────

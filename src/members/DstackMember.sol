@@ -27,12 +27,7 @@ import {MemberStorage} from "../storage/MemberStorage.sol";
 ///         been destroyed (spec §7.4). Storage layout is the
 ///         `teesql.storage.Member` ERC-7201 namespace shared across every
 ///         per-runtime Member impl.
-contract DstackMember is
-    Initializable,
-    UUPSUpgradeable,
-    IAppAuth,
-    IAppAuthBasicManagement
-{
+contract DstackMember is Initializable, UUPSUpgradeable, IAppAuth, IAppAuthBasicManagement {
     error ClusterZero();
     error NotClusterOwner();
     error ClusterDestroyed_();
@@ -59,13 +54,8 @@ contract DstackMember is
     // DstackKms calls this at boot. Forward to the dstack attestation
     // adapter's namespaced entry point.
 
-    function isAppAllowed(AppBootInfo calldata b)
-        external
-        view
-        returns (bool, string memory)
-    {
-        return IDstackAttestationAdapter(MemberStorage.layout().cluster)
-            .dstack_isAppAllowed(b);
+    function isAppAllowed(AppBootInfo calldata b) external view returns (bool, string memory) {
+        return IDstackAttestationAdapter(MemberStorage.layout().cluster).dstack_isAppAllowed(b);
     }
 
     // ── IAppAuthBasicManagement mutators ────────────────────────────────────
@@ -125,8 +115,7 @@ contract DstackMember is
     }
 
     function requireTcbUpToDate() external view returns (bool) {
-        return IDstackAttestationAdapter(MemberStorage.layout().cluster)
-            .dstack_requireTcbUpToDate();
+        return IDstackAttestationAdapter(MemberStorage.layout().cluster).dstack_requireTcbUpToDate();
     }
 
     function owner() external view returns (address) {
@@ -137,8 +126,7 @@ contract DstackMember is
     /// version so the phala-cli expected ABI is preserved while the diamond
     /// never directly exposes a bare `version()` selector.
     function version() external view returns (uint256) {
-        return IDstackAttestationAdapter(MemberStorage.layout().cluster)
-            .dstack_version();
+        return IDstackAttestationAdapter(MemberStorage.layout().cluster).dstack_version();
     }
 
     /// Member impl's own counter — distinct selector from the dstack-mirror
@@ -164,8 +152,7 @@ contract DstackMember is
     // ── ERC-165 ────────────────────────────────────────────────────────────
 
     function supportsInterface(bytes4 id) external pure returns (bool) {
-        return id == type(IAppAuth).interfaceId
-            || id == type(IAppAuthBasicManagement).interfaceId
+        return id == type(IAppAuth).interfaceId || id == type(IAppAuthBasicManagement).interfaceId
             || id == type(IERC165).interfaceId;
     }
 

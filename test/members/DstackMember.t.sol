@@ -92,8 +92,7 @@ contract DstackMemberTest is DiamondSmokeTest {
     ///      `bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)`.
     ///      Value confirmed against
     ///      `lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Utils.sol`.
-    bytes32 internal constant EIP1967_IMPL_SLOT =
-        0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    bytes32 internal constant EIP1967_IMPL_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     // ─── Fixture (called from each test) ───────────────────────────────────
 
@@ -112,11 +111,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         _buildDiamond();
         IDstackKmsAdapter(address(diamond)).dstack_kms_setKms(address(mockKms));
         member = DstackMember(
-            ICore(address(diamond)).createMember(
-                bytes32(uint256(0x1001)),
-                DSTACK_ATTESTATION_ID,
-                DSTACK_KMS_ID
-            )
+            ICore(address(diamond)).createMember(bytes32(uint256(0x1001)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID)
         );
     }
 
@@ -128,19 +123,15 @@ contract DstackMemberTest is DiamondSmokeTest {
     /// `isAppAllowed_propagatesRejectReason` test which deliberately
     /// wants a member that BootGate considers an "unknown passthrough".
     function _freshMemberRaw(bytes32 salt) internal returns (address) {
-        return factory.deployMember(
-            address(diamond),
-            salt,
-            DSTACK_ATTESTATION_ID
-        );
+        return factory.deployMember(address(diamond), salt, DSTACK_ATTESTATION_ID);
     }
 
     /// Build a minimal `AppBootInfo` payload for the IAppAuth tests.
-    function _bootInfo(
-        address passthrough,
-        bytes32 composeHash,
-        string memory tcbStatus
-    ) internal pure returns (IAppAuth.AppBootInfo memory b) {
+    function _bootInfo(address passthrough, bytes32 composeHash, string memory tcbStatus)
+        internal
+        pure
+        returns (IAppAuth.AppBootInfo memory b)
+    {
         b = IAppAuth.AppBootInfo({
             appId: passthrough,
             composeHash: composeHash,
@@ -176,10 +167,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         // the member's own `ClusterZero` guard we instantiate ERC1967Proxy
         // directly here, bypassing the factory's pre-check.
         vm.expectRevert(DstackMember.ClusterZero.selector);
-        new ERC1967Proxy(
-            address(dstackMemberImpl),
-            abi.encodeCall(DstackMember.initialize, (address(0)))
-        );
+        new ERC1967Proxy(address(dstackMemberImpl), abi.encodeCall(DstackMember.initialize, (address(0))));
     }
 
     function test_implContractCannotBeInitialized() public view {
@@ -188,9 +176,8 @@ contract DstackMemberTest is DiamondSmokeTest {
         // which sets `_initialized = type(uint64).max`. We assert via a
         // staticcall + low-level check so the view modifier on this test
         // is honored (no state changes attempted on the impl).
-        (bool ok, bytes memory ret) = address(dstackMemberImpl).staticcall(
-            abi.encodeCall(DstackMember.initialize, (address(0xCAFE)))
-        );
+        (bool ok, bytes memory ret) =
+            address(dstackMemberImpl).staticcall(abi.encodeCall(DstackMember.initialize, (address(0xCAFE))));
         assertFalse(ok, "init on impl should revert");
         // ret should encode the 4-byte InvalidInitialization selector.
         bytes4 sel;
@@ -208,9 +195,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         IAdmin(address(diamond)).addComposeHash(SOME_HASH);
 
         // Happy path: tcb gate off, should pass.
-        (bool ok, string memory reason) = member.isAppAllowed(
-            _bootInfo(address(member), SOME_HASH, "UpToDate")
-        );
+        (bool ok, string memory reason) = member.isAppAllowed(_bootInfo(address(member), SOME_HASH, "UpToDate"));
         assertTrue(ok, reason);
         assertEq(bytes(reason).length, 0, "no reason on success");
 
@@ -219,9 +204,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         // verifying that flipping it changes the result proves the call
         // actually traversed the dstack adapter (not just BootGate).
         IDstackAttestationAdapter(address(diamond)).dstack_setRequireTcbUpToDate(true);
-        (bool ok2, string memory reason2) = member.isAppAllowed(
-            _bootInfo(address(member), SOME_HASH, "OutOfDate")
-        );
+        (bool ok2, string memory reason2) = member.isAppAllowed(_bootInfo(address(member), SOME_HASH, "OutOfDate"));
         assertFalse(ok2, "tcb gate should reject OutOfDate");
         assertEq(reason2, "tcb not up to date", "tcb reason text");
     }
@@ -234,9 +217,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         // unmodified through the Member's forwarder.
         DstackMember rawMember = DstackMember(_freshMemberRaw(bytes32(uint256(0xDEAD0001))));
         IAdmin(address(diamond)).addComposeHash(SOME_HASH);
-        (bool ok, string memory reason) = rawMember.isAppAllowed(
-            _bootInfo(address(rawMember), SOME_HASH, "UpToDate")
-        );
+        (bool ok, string memory reason) = rawMember.isAppAllowed(_bootInfo(address(rawMember), SOME_HASH, "UpToDate"));
         assertFalse(ok, "should reject unknown passthrough");
         assertEq(reason, "unknown passthrough", "reason propagation");
     }
@@ -252,10 +233,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         _initFixture();
         bytes32 h = bytes32(uint256(0xAA));
         member.addComposeHash(h);
-        assertTrue(
-            IAppAuthBasicManagement(address(diamond)).allowedComposeHashes(h),
-            "compose hash present on diamond"
-        );
+        assertTrue(IAppAuthBasicManagement(address(diamond)).allowedComposeHashes(h), "compose hash present on diamond");
     }
 
     function test_addComposeHash_revertsForNonOwner() public {
@@ -270,10 +248,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         bytes32 h = bytes32(uint256(0xAB));
         member.addComposeHash(h);
         member.removeComposeHash(h);
-        assertFalse(
-            IAppAuthBasicManagement(address(diamond)).allowedComposeHashes(h),
-            "compose hash cleared"
-        );
+        assertFalse(IAppAuthBasicManagement(address(diamond)).allowedComposeHashes(h), "compose hash cleared");
     }
 
     function test_removeComposeHash_revertsForNonOwner() public {
@@ -287,10 +262,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         _initFixture();
         bytes32 d = bytes32(uint256(0xD0));
         member.addDevice(d);
-        assertTrue(
-            IAppAuthBasicManagement(address(diamond)).allowedDeviceIds(d),
-            "device present on diamond"
-        );
+        assertTrue(IAppAuthBasicManagement(address(diamond)).allowedDeviceIds(d), "device present on diamond");
     }
 
     function test_addDevice_revertsForNonOwner() public {
@@ -305,10 +277,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         bytes32 d = bytes32(uint256(0xD1));
         member.addDevice(d);
         member.removeDevice(d);
-        assertFalse(
-            IAppAuthBasicManagement(address(diamond)).allowedDeviceIds(d),
-            "device cleared"
-        );
+        assertFalse(IAppAuthBasicManagement(address(diamond)).allowedDeviceIds(d), "device cleared");
     }
 
     function test_removeDevice_revertsForNonOwner() public {
@@ -321,15 +290,9 @@ contract DstackMemberTest is DiamondSmokeTest {
     function test_setAllowAnyDevice_succeedsFromClusterOwner() public {
         _initFixture();
         member.setAllowAnyDevice(true);
-        assertTrue(
-            IAppAuthBasicManagement(address(diamond)).allowAnyDevice(),
-            "allowAnyDevice true on diamond"
-        );
+        assertTrue(IAppAuthBasicManagement(address(diamond)).allowAnyDevice(), "allowAnyDevice true on diamond");
         member.setAllowAnyDevice(false);
-        assertFalse(
-            IAppAuthBasicManagement(address(diamond)).allowAnyDevice(),
-            "allowAnyDevice false on diamond"
-        );
+        assertFalse(IAppAuthBasicManagement(address(diamond)).allowAnyDevice(), "allowAnyDevice false on diamond");
     }
 
     function test_setAllowAnyDevice_revertsForNonOwner() public {
@@ -343,13 +306,11 @@ contract DstackMemberTest is DiamondSmokeTest {
         _initFixture();
         member.setRequireTcbUpToDate(true);
         assertTrue(
-            IDstackAttestationAdapter(address(diamond)).dstack_requireTcbUpToDate(),
-            "tcb requirement on diamond"
+            IDstackAttestationAdapter(address(diamond)).dstack_requireTcbUpToDate(), "tcb requirement on diamond"
         );
         member.setRequireTcbUpToDate(false);
         assertFalse(
-            IDstackAttestationAdapter(address(diamond)).dstack_requireTcbUpToDate(),
-            "tcb requirement off on diamond"
+            IDstackAttestationAdapter(address(diamond)).dstack_requireTcbUpToDate(), "tcb requirement off on diamond"
         );
     }
 
@@ -415,9 +376,7 @@ contract DstackMemberTest is DiamondSmokeTest {
 
     // ─── Lifecycle view forwarders (3 tests) ───────────────────────────────
 
-    function test_destroyedAt_forwards_returns0OnLiveCluster_thenTimestampOnDestroy()
-        public
-    {
+    function test_destroyedAt_forwards_returns0OnLiveCluster_thenTimestampOnDestroy() public {
         _initFixture();
         assertEq(member.destroyedAt(), 0, "live cluster");
         // destroy() requires the diamond's SafeOwnable owner (deployer).
@@ -441,11 +400,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         // forwarder simply returns 0 for an unknown id, proving the call
         // routes through ViewFacet.memberRetiredAt and reads the
         // LifecycleStorage mapping correctly.
-        assertEq(
-            member.memberRetiredAt(bytes32(uint256(0xDEADBEEF))),
-            0,
-            "unretired returns 0"
-        );
+        assertEq(member.memberRetiredAt(bytes32(uint256(0xDEADBEEF))), 0, "unretired returns 0");
     }
 
     // ─── Member-impl identity (1 test) ─────────────────────────────────────
@@ -460,10 +415,7 @@ contract DstackMemberTest is DiamondSmokeTest {
     function test_supportsInterface_returnsTrueForExpectedIds() public {
         _initFixture();
         assertTrue(member.supportsInterface(type(IAppAuth).interfaceId), "IAppAuth");
-        assertTrue(
-            member.supportsInterface(type(IAppAuthBasicManagement).interfaceId),
-            "IAppAuthBasicManagement"
-        );
+        assertTrue(member.supportsInterface(type(IAppAuthBasicManagement).interfaceId), "IAppAuthBasicManagement");
         assertTrue(member.supportsInterface(type(IERC165).interfaceId), "IERC165");
     }
 
@@ -477,9 +429,7 @@ contract DstackMemberTest is DiamondSmokeTest {
 
     // ─── UUPS upgrade authorization (5 tests) ──────────────────────────────
 
-    function test_upgradeToAndCall_succeedsForClusterOwner_andSwapsBehavior()
-        public
-    {
+    function test_upgradeToAndCall_succeedsForClusterOwner_andSwapsBehavior() public {
         _initFixture();
         DstackMemberV2 v2Impl = new DstackMemberV2();
 
@@ -488,27 +438,15 @@ contract DstackMemberTest is DiamondSmokeTest {
         UUPSUpgradeable(address(member)).upgradeToAndCall(address(v2Impl), "");
 
         // Behavior swap: v2's overridden version returns 2.
-        assertEq(
-            DstackMemberV2(address(member)).memberImplVersion(),
-            2,
-            "upgraded to v2"
-        );
+        assertEq(DstackMemberV2(address(member)).memberImplVersion(), 2, "upgraded to v2");
 
         // Storage continuity: cluster pointer is unchanged (same ERC-7201
         // namespace across v1 + v2), so reads still resolve to the diamond.
-        assertEq(
-            DstackMemberV2(address(member)).cluster(),
-            address(diamond),
-            "cluster preserved"
-        );
+        assertEq(DstackMemberV2(address(member)).cluster(), address(diamond), "cluster preserved");
 
         // EIP-1967 implementation slot now points to v2.
         bytes32 implSlot = vm.load(address(member), EIP1967_IMPL_SLOT);
-        assertEq(
-            address(uint160(uint256(implSlot))),
-            address(v2Impl),
-            "impl slot points at v2"
-        );
+        assertEq(address(uint160(uint256(implSlot))), address(v2Impl), "impl slot points at v2");
     }
 
     function test_upgradeToAndCall_revertsForNonOwner() public {
@@ -555,9 +493,7 @@ contract DstackMemberTest is DiamondSmokeTest {
         // low-level call so the only-nominee modifier sees msg.sender =
         // newOwner.
         vm.prank(newOwner);
-        (bool ok, ) = address(diamond).call(
-            abi.encodeWithSignature("acceptOwnership()")
-        );
+        (bool ok,) = address(diamond).call(abi.encodeWithSignature("acceptOwnership()"));
         require(ok, "acceptOwnership failed");
 
         // OLD owner (the test contract) must now be rejected. The Member's
@@ -569,34 +505,20 @@ contract DstackMemberTest is DiamondSmokeTest {
         // NEW owner succeeds.
         vm.prank(newOwner);
         UUPSUpgradeable(address(member)).upgradeToAndCall(address(v2Impl), "");
-        assertEq(
-            DstackMemberV2(address(member)).memberImplVersion(),
-            2,
-            "v2 active under new owner"
-        );
+        assertEq(DstackMemberV2(address(member)).memberImplVersion(), 2, "v2 active under new owner");
     }
 
     // ─── EIP-1967 storage slot identity (1 test) ───────────────────────────
 
-    function test_implementationSlot_pointsToDstackMemberV1_thenV2OnUpgrade()
-        public
-    {
+    function test_implementationSlot_pointsToDstackMemberV1_thenV2OnUpgrade() public {
         _initFixture();
         bytes32 slotPre = vm.load(address(member), EIP1967_IMPL_SLOT);
-        assertEq(
-            address(uint160(uint256(slotPre))),
-            address(dstackMemberImpl),
-            "EIP-1967 slot starts on v1 impl"
-        );
+        assertEq(address(uint160(uint256(slotPre))), address(dstackMemberImpl), "EIP-1967 slot starts on v1 impl");
 
         DstackMemberV2 v2Impl = new DstackMemberV2();
         UUPSUpgradeable(address(member)).upgradeToAndCall(address(v2Impl), "");
 
         bytes32 slotPost = vm.load(address(member), EIP1967_IMPL_SLOT);
-        assertEq(
-            address(uint160(uint256(slotPost))),
-            address(v2Impl),
-            "EIP-1967 slot moved to v2 impl"
-        );
+        assertEq(address(uint160(uint256(slotPost))), address(v2Impl), "EIP-1967 slot moved to v2 impl");
     }
 }

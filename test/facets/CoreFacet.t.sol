@@ -49,59 +49,44 @@ contract CoreFacetTest is DiamondSmokeTest {
     //   compressed = (Y even ? 0x02 : 0x03) || X
     //
     // K1: prefix 0x03 (odd y)
-    uint256 internal constant PK1 =
-        0x1111111111111111111111111111111111111111111111111111111111111111;
+    uint256 internal constant PK1 = 0x1111111111111111111111111111111111111111111111111111111111111111;
     address internal constant ADDR1 = 0x19E7E376E7C213B7E7e7e46cc70A5dD086DAff2A;
-    bytes internal constant COMP1 =
-        hex"034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa";
+    bytes internal constant COMP1 = hex"034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa";
 
     // K2: prefix 0x02 (even y)
-    uint256 internal constant PK2 =
-        0x2222222222222222222222222222222222222222222222222222222222222222;
+    uint256 internal constant PK2 = 0x2222222222222222222222222222222222222222222222222222222222222222;
     address internal constant ADDR2 = 0x1563915e194D8CfBA1943570603F7606A3115508;
-    bytes internal constant COMP2 =
-        hex"02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27";
+    bytes internal constant COMP2 = hex"02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27";
 
     // K3: prefix 0x02 -> KMS root (added to allowedKmsRoots in _ensureDiamond)
-    uint256 internal constant PK3 =
-        0x3333333333333333333333333333333333333333333333333333333333333333;
+    uint256 internal constant PK3 = 0x3333333333333333333333333333333333333333333333333333333333333333;
     address internal constant ADDR3 = 0x5CbDd86a2FA8Dc4bDdd8a8f69dBa48572EeC07FB;
-    bytes internal constant COMP3 =
-        hex"023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1";
+    bytes internal constant COMP3 = hex"023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1";
 
     // K4: prefix 0x03
-    uint256 internal constant PK4 =
-        0x4444444444444444444444444444444444444444444444444444444444444444;
+    uint256 internal constant PK4 = 0x4444444444444444444444444444444444444444444444444444444444444444;
     address internal constant ADDR4 = 0x7564105E977516C53bE337314c7E53838967bDaC;
-    bytes internal constant COMP4 =
-        hex"032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991";
+    bytes internal constant COMP4 = hex"032c0b7cf95324a07d05398b240174dc0c2be444d96b159aa6c7f7b1e668680991";
 
     // K5: prefix 0x02
-    uint256 internal constant PK5 =
-        0x5555555555555555555555555555555555555555555555555555555555555555;
+    uint256 internal constant PK5 = 0x5555555555555555555555555555555555555555555555555555555555555555;
     address internal constant ADDR5 = 0xe1fAE9b4fAB2F5726677ECfA912d96b0B683e6a9;
-    bytes internal constant COMP5 =
-        hex"029ac20335eb38768d2052be1dbbc3c8f6178407458e51e6b4ad22f1d91758895b";
+    bytes internal constant COMP5 = hex"029ac20335eb38768d2052be1dbbc3c8f6178407458e51e6b4ad22f1d91758895b";
 
     // K6: prefix 0x03
-    uint256 internal constant PK6 =
-        0x6666666666666666666666666666666666666666666666666666666666666666;
+    uint256 internal constant PK6 = 0x6666666666666666666666666666666666666666666666666666666666666666;
     address internal constant ADDR6 = 0xdb2430B4e9AC14be6554d3942822BE74811A1AF9;
-    bytes internal constant COMP6 =
-        hex"035ab4689e400a4a160cf01cd44730845a54768df8547dcdf073d964f109f18c30";
+    bytes internal constant COMP6 = hex"035ab4689e400a4a160cf01cd44730845a54768df8547dcdf073d964f109f18c30";
 
     // K7: spare — used as an off-registry signer for BadSig scenarios.
     //     pk = 0x77...77 (64 chars).
-    uint256 internal constant PK7 =
-        0x7777777777777777777777777777777777777777777777777777777777777777;
+    uint256 internal constant PK7 = 0x7777777777777777777777777777777777777777777777777777777777777777;
     address internal constant ADDR7 = 0xAe72A48c1a36bd18Af168541c53037965d26e4A8;
 
     // K8: prefix 0x02 (spare derived for member 4)
-    uint256 internal constant PK8 =
-        0x8888888888888888888888888888888888888888888888888888888888888888;
+    uint256 internal constant PK8 = 0x8888888888888888888888888888888888888888888888888888888888888888;
     address internal constant ADDR8 = 0x62f94E9AC9349BCCC61Bfe66ddAdE6292702EcB6;
-    bytes internal constant COMP8 =
-        hex"021617d38ed8d8657da4d4761e8057bc396ea9e4b9d29776d4be096016dbd2509b";
+    bytes internal constant COMP8 = hex"021617d38ed8d8657da4d4761e8057bc396ea9e4b9d29776d4be096016dbd2509b";
 
     string internal constant _PURPOSE = "test-purpose";
 
@@ -153,24 +138,34 @@ contract CoreFacetTest is DiamondSmokeTest {
         // Slot -> (app key, derived key) assignments. Avoids overlap with
         // K3 (KMS root) and K7 (off-registry sig).
         if (slot == 1) {
-            mk.appPriv = PK1; mk.appPub = COMP1;
-            mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+            mk.appPriv = PK1;
+            mk.appPub = COMP1;
+            mk.derivedPriv = PK2;
+            mk.derivedPub = COMP2;
+            mk.derivedAddr = ADDR2;
         } else if (slot == 2) {
-            mk.appPriv = PK4; mk.appPub = COMP4;
-            mk.derivedPriv = PK5; mk.derivedPub = COMP5; mk.derivedAddr = ADDR5;
+            mk.appPriv = PK4;
+            mk.appPub = COMP4;
+            mk.derivedPriv = PK5;
+            mk.derivedPub = COMP5;
+            mk.derivedAddr = ADDR5;
         } else if (slot == 3) {
-            mk.appPriv = PK1; mk.appPub = COMP1;
-            mk.derivedPriv = PK6; mk.derivedPub = COMP6; mk.derivedAddr = ADDR6;
+            mk.appPriv = PK1;
+            mk.appPub = COMP1;
+            mk.derivedPriv = PK6;
+            mk.derivedPub = COMP6;
+            mk.derivedAddr = ADDR6;
         } else {
-            mk.appPriv = PK1; mk.appPub = COMP1;
-            mk.derivedPriv = PK8; mk.derivedPub = COMP8; mk.derivedAddr = ADDR8;
+            mk.appPriv = PK1;
+            mk.appPub = COMP1;
+            mk.derivedPriv = PK8;
+            mk.derivedPub = COMP8;
+            mk.derivedAddr = ADDR8;
         }
 
         // Mint passthrough.
         bytes32 salt = bytes32(uint256(slot) * 1e18);
-        mk.passthrough = ICore(address(diamond)).createMember(
-            salt, DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        mk.passthrough = ICore(address(diamond)).createMember(salt, DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         mk.instanceId = address(uint160(uint256(keccak256(abi.encode("instance", slot)))));
         mk.endpoint = abi.encodePacked("endpoint-", slot);
@@ -190,11 +185,7 @@ contract CoreFacetTest is DiamondSmokeTest {
     ///         registrationMessage(...) by the derived key — its job is
     ///         to prove the derived key consents to *this specific*
     ///         (instanceId, endpoint, publicEndpoint, dnsLabel) tuple.
-    function _buildRegisterArgs(MemberKeys memory mk)
-        internal
-        view
-        returns (ICore.RegisterArgs memory args)
-    {
+    function _buildRegisterArgs(MemberKeys memory mk) internal view returns (ICore.RegisterArgs memory args) {
         DstackSigChain.Proof memory p;
         p.codeId = bytes32(bytes20(mk.passthrough));
         p.appCompressedPubkey = mk.appPub;
@@ -212,9 +203,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         // only checks that the derived key signed it. We pick the
         // registration bind hash so the SAME signature blob doubles as
         // bindingSig. Two birds, one ecrecover.
-        bytes32 bindHash = ICore(address(diamond)).registrationMessage(
-            mk.instanceId, mk.endpoint, mk.publicEndpoint, mk.dnsLabel
-        );
+        bytes32 bindHash =
+            ICore(address(diamond)).registrationMessage(mk.instanceId, mk.endpoint, mk.publicEndpoint, mk.dnsLabel);
         p.messageHash = bindHash;
         bytes memory derivedSig = _signMessage(mk.derivedPriv, bindHash);
         p.messageSignature = derivedSig;
@@ -247,25 +237,13 @@ contract CoreFacetTest is DiamondSmokeTest {
         return _sign(priv, hash);
     }
 
-    function _signKms(uint256 priv, bytes32 codeId, bytes memory appComp)
-        internal
-        view
-        returns (bytes memory)
-    {
-        bytes32 hash = keccak256(
-            abi.encodePacked("dstack-kms-issued:", bytes20(codeId), appComp)
-        );
+    function _signKms(uint256 priv, bytes32 codeId, bytes memory appComp) internal view returns (bytes memory) {
+        bytes32 hash = keccak256(abi.encodePacked("dstack-kms-issued:", bytes20(codeId), appComp));
         return _sign(priv, hash);
     }
 
-    function _signMessage(uint256 priv, bytes32 messageHash)
-        internal
-        view
-        returns (bytes memory)
-    {
-        bytes32 ethHash = keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash)
-        );
+    function _signMessage(uint256 priv, bytes32 messageHash) internal view returns (bytes memory) {
+        bytes32 ethHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
         return _sign(priv, ethHash);
     }
 
@@ -286,12 +264,11 @@ contract CoreFacetTest is DiamondSmokeTest {
 
     // ─── CallAuth + Witness signing helpers ────────────────────────────────
 
-    function _signCall(
-        bytes32 memberId,
-        uint256 derivedPriv,
-        bytes4 selector,
-        bytes memory argBlob
-    ) internal view returns (ICore.CallAuth memory auth) {
+    function _signCall(bytes32 memberId, uint256 derivedPriv, bytes4 selector, bytes memory argBlob)
+        internal
+        view
+        returns (ICore.CallAuth memory auth)
+    {
         uint256 nonce = ICore(address(diamond)).memberNonce(memberId);
         bytes32 callHash = ICore(address(diamond)).callMessage(memberId, nonce, selector, argBlob);
         auth.memberId = memberId;
@@ -305,9 +282,7 @@ contract CoreFacetTest is DiamondSmokeTest {
         bytes32 voucherMemberId,
         uint256 voucherDerivedPriv
     ) internal view returns (ICore.Witness memory w) {
-        bytes32 wHash = ICore(address(diamond)).witnessMessage(
-            deposedMemberId, deposedEpoch, voucherMemberId
-        );
+        bytes32 wHash = ICore(address(diamond)).witnessMessage(deposedMemberId, deposedEpoch, voucherMemberId);
         w.voucherMemberId = voucherMemberId;
         w.sig = _signMessage(voucherDerivedPriv, wHash);
     }
@@ -318,14 +293,16 @@ contract CoreFacetTest is DiamondSmokeTest {
 
     function test_register_happyPath() public withDiamond {
         // Mint passthrough, then register.
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"deadbeef";
         mk.publicEndpoint = bytes("https://m1.example.com");
@@ -353,8 +330,11 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_register_revertsOnWrongAppId() public withDiamond {
         MemberKeys memory mk;
         mk.passthrough = address(0x1234567890123456789012345678901234567890); // never minted
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -366,13 +346,15 @@ contract CoreFacetTest is DiamondSmokeTest {
     }
 
     function test_register_revertsOnInstanceBindingInvalid() public withDiamond {
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -380,9 +362,8 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         ICore.RegisterArgs memory args = _buildRegisterArgs(mk);
         // Replace bindingSig with a sig from the WRONG key (PK7).
-        bytes32 bindHash = ICore(address(diamond)).registrationMessage(
-            mk.instanceId, mk.endpoint, mk.publicEndpoint, mk.dnsLabel
-        );
+        bytes32 bindHash =
+            ICore(address(diamond)).registrationMessage(mk.instanceId, mk.endpoint, mk.publicEndpoint, mk.dnsLabel);
         args.bindingSig = _signMessage(PK7, bindHash);
 
         vm.expectRevert(ICore.InstanceBindingInvalid.selector);
@@ -390,13 +371,15 @@ contract CoreFacetTest is DiamondSmokeTest {
     }
 
     function test_register_revertsOnTamperedEndpoint() public withDiamond {
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa"; // signed over this
         mk.publicEndpoint = bytes("p");
@@ -410,13 +393,15 @@ contract CoreFacetTest is DiamondSmokeTest {
     }
 
     function test_register_revertsOnTamperedDnsLabel() public withDiamond {
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -430,13 +415,15 @@ contract CoreFacetTest is DiamondSmokeTest {
     }
 
     function test_register_revertsOnTamperedInstanceId() public withDiamond {
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -452,9 +439,8 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_register_revertsOnAdapterMismatch() public withDiamond {
         // Stomp the AdapterRegistry.passthroughToKmsId mapping for the
         // minted passthrough so the post-verifySigChain check fails.
-        address passthrough = ICore(address(diamond)).createMember(
-            bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID
-        );
+        address passthrough =
+            ICore(address(diamond)).createMember(bytes32(uint256(1e18)), DSTACK_ATTESTATION_ID, DSTACK_KMS_ID);
 
         // AdapterRegistryStorage.SLOT = 0x6ee2bb1ae478bac7e8c2d1f0e58e1f7a1636fb53a7bc4fcbf96fa7b68f3afb00
         // Layout offsets:
@@ -470,8 +456,11 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         MemberKeys memory mk;
         mk.passthrough = passthrough;
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -487,8 +476,11 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         MemberKeys memory mk;
         mk.passthrough = address(0x1234); // unreachable — gate fires first
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -504,8 +496,11 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         MemberKeys memory mk;
         mk.passthrough = address(0x1234);
-        mk.appPriv = PK1; mk.appPub = COMP1;
-        mk.derivedPriv = PK2; mk.derivedPub = COMP2; mk.derivedAddr = ADDR2;
+        mk.appPriv = PK1;
+        mk.appPub = COMP1;
+        mk.derivedPriv = PK2;
+        mk.derivedPub = COMP2;
+        mk.derivedAddr = ADDR2;
         mk.instanceId = address(0xBEEF);
         mk.endpoint = hex"aa";
         mk.publicEndpoint = bytes("p");
@@ -525,10 +520,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         bytes memory newEndpoint = bytes("leader-ep");
         ICore.Witness[] memory witnesses = new ICore.Witness[](0);
 
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(newEndpoint, witnesses)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(newEndpoint, witnesses));
         ICore(address(diamond)).claimLeader(auth, newEndpoint, witnesses);
 
         (bytes32 leader, uint256 epoch) = ICore(address(diamond)).leaderLease();
@@ -542,19 +535,15 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep1");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
         // Self-reclaim with empty witnesses
         bytes memory ep2 = bytes("ep2");
         ICore.Witness[] memory w2 = new ICore.Witness[](0);
-        ICore.CallAuth memory auth2 = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(ep2, w2)
-        );
+        ICore.CallAuth memory auth2 =
+            _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep2, w2));
         ICore(address(diamond)).claimLeader(auth2, ep2, w2);
 
         (bytes32 leader, uint256 epoch) = ICore(address(diamond)).leaderLease();
@@ -571,10 +560,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -583,10 +570,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](1);
         bWitnesses[0] = _signWitness(a.memberId, 1, c.memberId, c.derivedPriv);
 
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
 
         (bytes32 leader, uint256 epoch) = ICore(address(diamond)).leaderLease();
@@ -602,20 +587,16 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
         // B claims with EMPTY witnesses -> NoWitness.
         bytes memory bEp = bytes("ep-b");
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](0);
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
 
         vm.expectRevert(ICore.NoWitness.selector);
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
@@ -629,10 +610,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -640,10 +619,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         bytes memory bEp = bytes("ep-b");
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](1);
         bWitnesses[0] = _signWitness(a.memberId, 1, b.memberId, b.derivedPriv);
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
 
         vm.expectRevert(ICore.SelfWitness.selector);
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
@@ -657,10 +634,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -669,10 +644,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](1);
         // Sig key doesn't matter — registry-membership check fires first.
         bWitnesses[0] = _signWitness(a.memberId, 1, unknownId, PK7);
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
 
         vm.expectRevert(ICore.WitnessNotMember.selector);
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
@@ -687,10 +660,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -698,10 +669,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](2);
         bWitnesses[0] = _signWitness(a.memberId, 1, c.memberId, c.derivedPriv);
         bWitnesses[1] = _signWitness(a.memberId, 1, c.memberId, c.derivedPriv);
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
 
         vm.expectRevert(ICore.DuplicateWitness.selector);
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
@@ -716,10 +685,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -728,10 +695,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         // Recovered signer != C.derivedAddr -> BadWitnessSig.
         ICore.Witness[] memory bWitnesses = new ICore.Witness[](1);
         bWitnesses[0] = _signWitness(a.memberId, 1, c.memberId, PK7);
-        ICore.CallAuth memory bAuth = _signCall(
-            b.memberId, b.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(bEp, bWitnesses)
-        );
+        ICore.CallAuth memory bAuth =
+            _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(bEp, bWitnesses));
 
         vm.expectRevert(ICore.BadWitnessSig.selector);
         ICore(address(diamond)).claimLeader(bAuth, bEp, bWitnesses);
@@ -746,10 +711,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         {
             bytes memory ep = bytes("ep-a");
             ICore.Witness[] memory w = new ICore.Witness[](0);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
         // B claims with C's witness -> epoch 2. (Now leader=B, epoch=2)
@@ -757,10 +720,8 @@ contract CoreFacetTest is DiamondSmokeTest {
             bytes memory ep = bytes("ep-b");
             ICore.Witness[] memory w = new ICore.Witness[](1);
             w[0] = _signWitness(a.memberId, 1, c.memberId, c.derivedPriv);
-            ICore.CallAuth memory auth = _signCall(
-                b.memberId, b.derivedPriv,
-                ICore.claimLeader.selector, abi.encode(ep, w)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(b.memberId, b.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
             ICore(address(diamond)).claimLeader(auth, ep, w);
         }
 
@@ -771,10 +732,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         bytes memory aEp2 = bytes("ep-a2");
         ICore.Witness[] memory aWitnesses = new ICore.Witness[](1);
         aWitnesses[0] = _signWitness(a.memberId, 1, c.memberId, c.derivedPriv);
-        ICore.CallAuth memory aAuth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(aEp2, aWitnesses)
-        );
+        ICore.CallAuth memory aAuth =
+            _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(aEp2, aWitnesses));
 
         vm.expectRevert(ICore.BadWitnessSig.selector);
         ICore(address(diamond)).claimLeader(aAuth, aEp2, aWitnesses);
@@ -784,10 +743,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("brand-new-endpoint");
         ICore.Witness[] memory w = new ICore.Witness[](0);
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(newEp, w)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(newEp, w));
         ICore(address(diamond)).claimLeader(auth, newEp, w);
 
         CoreStorage.Member memory m = ICore(address(diamond)).getMember(a.memberId);
@@ -798,10 +755,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("evt-ep");
         ICore.Witness[] memory w = new ICore.Witness[](0);
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(newEp, w)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(newEp, w));
 
         vm.expectEmit(true, true, false, true);
         emit ICore.LeaderClaimed(a.memberId, 1, newEp);
@@ -814,10 +769,7 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         bytes memory ep = bytes("ep");
         ICore.Witness[] memory w = new ICore.Witness[](0);
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(ep, w)
-        );
+        ICore.CallAuth memory auth = _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
         vm.expectRevert(ICore.ClusterDestroyed_.selector);
         ICore(address(diamond)).claimLeader(auth, ep, w);
     }
@@ -828,10 +780,7 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         bytes memory ep = bytes("ep");
         ICore.Witness[] memory w = new ICore.Witness[](0);
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(ep, w)
-        );
+        ICore.CallAuth memory auth = _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
         vm.expectRevert(CoreFacet.Paused.selector);
         ICore(address(diamond)).claimLeader(auth, ep, w);
     }
@@ -843,10 +792,7 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         bytes memory ep = bytes("ep");
         ICore.Witness[] memory w = new ICore.Witness[](0);
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.claimLeader.selector, abi.encode(ep, w)
-        );
+        ICore.CallAuth memory auth = _signCall(a.memberId, a.derivedPriv, ICore.claimLeader.selector, abi.encode(ep, w));
         vm.expectRevert(ICore.MemberRetired_.selector);
         ICore(address(diamond)).claimLeader(auth, ep, w);
     }
@@ -858,10 +804,8 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_updateEndpoint_happyPath() public withDiamond {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("updated-ep");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
 
         vm.expectEmit(true, false, false, true);
         emit ICore.EndpointUpdated(a.memberId, newEp);
@@ -874,10 +818,8 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_updateEndpoint_revertsOnBadNonce() public withDiamond {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("ep");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
         auth.nonce = 999;
 
         vm.expectRevert(ICore.BadNonce.selector);
@@ -887,15 +829,11 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_updateEndpoint_revertsOnBadSig() public withDiamond {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("ep");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
         // Re-sign with the WRONG key.
-        bytes32 callHash = ICore(address(diamond)).callMessage(
-            a.memberId, auth.nonce,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        bytes32 callHash = ICore(address(diamond))
+            .callMessage(a.memberId, auth.nonce, ICore.updateEndpoint.selector, abi.encode(newEp));
         auth.sig = _signMessage(PK7, callHash);
 
         vm.expectRevert(ICore.BadSig.selector);
@@ -907,10 +845,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         IAdmin(address(diamond)).retireMember(a.memberId);
 
         bytes memory newEp = bytes("ep");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
         vm.expectRevert(ICore.MemberRetired_.selector);
         ICore(address(diamond)).updateEndpoint(auth, newEp);
     }
@@ -931,10 +867,8 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_updatePublicEndpoint_happyPath() public withDiamond {
         MemberKeys memory a = _mintMember(1);
         bytes memory newPub = bytes("https://new.example.com");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updatePublicEndpoint.selector, abi.encode(newPub)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updatePublicEndpoint.selector, abi.encode(newPub));
 
         vm.expectEmit(true, false, false, true);
         emit ICore.PublicEndpointUpdated(a.memberId, newPub);
@@ -953,10 +887,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory b = _mintMember(2);
         bytes memory payload = bytes("encrypted-payload-blob");
 
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.onboard.selector, abi.encode(b.memberId, payload)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.onboard.selector, abi.encode(b.memberId, payload));
 
         vm.expectEmit(true, true, false, true);
         emit ICore.OnboardingPosted(b.memberId, a.memberId);
@@ -972,10 +904,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory a = _mintMember(1);
         bytes32 unknownId = keccak256("never-existed");
         bytes memory payload = bytes("p");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.onboard.selector, abi.encode(unknownId, payload)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.onboard.selector, abi.encode(unknownId, payload));
 
         vm.expectRevert(ICore.NotMember.selector);
         ICore(address(diamond)).onboard(auth, unknownId, payload);
@@ -985,10 +915,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory a = _mintMember(1);
         MemberKeys memory b = _mintMember(2);
         bytes memory payload = bytes("p");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.onboard.selector, abi.encode(b.memberId, payload)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.onboard.selector, abi.encode(b.memberId, payload));
         IAdmin(address(diamond)).destroy();
 
         vm.expectRevert(ICore.ClusterDestroyed_.selector);
@@ -999,10 +927,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         MemberKeys memory a = _mintMember(1);
         MemberKeys memory b = _mintMember(2);
         bytes memory payload = bytes("p");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.onboard.selector, abi.encode(b.memberId, payload)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.onboard.selector, abi.encode(b.memberId, payload));
         IAdmin(address(diamond)).retireMember(a.memberId);
 
         vm.expectRevert(ICore.MemberRetired_.selector);
@@ -1015,10 +941,8 @@ contract CoreFacetTest is DiamondSmokeTest {
 
         for (uint256 i = 0; i < 3; i++) {
             bytes memory payload = abi.encodePacked("msg-", i);
-            ICore.CallAuth memory auth = _signCall(
-                a.memberId, a.derivedPriv,
-                ICore.onboard.selector, abi.encode(b.memberId, payload)
-            );
+            ICore.CallAuth memory auth =
+                _signCall(a.memberId, a.derivedPriv, ICore.onboard.selector, abi.encode(b.memberId, payload));
             ICore(address(diamond)).onboard(auth, b.memberId, payload);
         }
 
@@ -1036,10 +960,8 @@ contract CoreFacetTest is DiamondSmokeTest {
     function test_callAuth_replayProtection() public withDiamond {
         MemberKeys memory a = _mintMember(1);
         bytes memory newEp = bytes("ep-once");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
 
         // First call succeeds.
         ICore(address(diamond)).updateEndpoint(auth, newEp);
@@ -1053,10 +975,8 @@ contract CoreFacetTest is DiamondSmokeTest {
         assertEq(ICore(address(diamond)).memberNonce(a.memberId), 0, "nonce starts at 0");
 
         bytes memory newEp = bytes("ep");
-        ICore.CallAuth memory auth = _signCall(
-            a.memberId, a.derivedPriv,
-            ICore.updateEndpoint.selector, abi.encode(newEp)
-        );
+        ICore.CallAuth memory auth =
+            _signCall(a.memberId, a.derivedPriv, ICore.updateEndpoint.selector, abi.encode(newEp));
         ICore(address(diamond)).updateEndpoint(auth, newEp);
 
         assertEq(ICore(address(diamond)).memberNonce(a.memberId), 1, "nonce incremented to 1");
@@ -1126,12 +1046,8 @@ contract CoreFacetTest is DiamondSmokeTest {
 
     function test_callMessage_includesSelector() public withDiamond {
         bytes memory args = hex"deadbeef";
-        bytes32 h1 = ICore(address(diamond)).callMessage(
-            keccak256("m"), 0, ICore.updateEndpoint.selector, args
-        );
-        bytes32 h2 = ICore(address(diamond)).callMessage(
-            keccak256("m"), 0, ICore.updatePublicEndpoint.selector, args
-        );
+        bytes32 h1 = ICore(address(diamond)).callMessage(keccak256("m"), 0, ICore.updateEndpoint.selector, args);
+        bytes32 h2 = ICore(address(diamond)).callMessage(keccak256("m"), 0, ICore.updatePublicEndpoint.selector, args);
         assertTrue(h1 != h2, "selector binds");
     }
 

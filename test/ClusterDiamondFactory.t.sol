@@ -5,12 +5,9 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {DiamondSmokeTest, IClusterView} from "../test/DiamondSmoke.t.sol";
 
-import {IDiamondWritableInternal} from
-    "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
-import {IDiamondReadable} from
-    "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
-import {IERC2535DiamondCutInternal} from
-    "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
+import {IDiamondWritableInternal} from "@solidstate/contracts/proxy/diamond/writable/IDiamondWritableInternal.sol";
+import {IDiamondReadable} from "@solidstate/contracts/proxy/diamond/readable/IDiamondReadable.sol";
+import {IERC2535DiamondCutInternal} from "@solidstate/contracts/interfaces/IERC2535DiamondCutInternal.sol";
 import {IERC173} from "@solidstate/contracts/interfaces/IERC173.sol";
 
 // `FacetCut` + `FacetCutAction` live on `IERC2535DiamondCutInternal` and
@@ -72,10 +69,7 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         return _deployClusterViaFactoryAs(deployer, salt);
     }
 
-    function _deployClusterViaFactoryAs(address caller, bytes32 salt)
-        internal
-        returns (address)
-    {
+    function _deployClusterViaFactoryAs(address caller, bytes32 salt) internal returns (address) {
         ClusterDiamondFactory f = _freshFactory();
 
         IDiamondWritableInternal.FacetCut[] memory cuts = _buildAllFacetCuts();
@@ -88,11 +82,7 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
     /// Mirror of `DiamondSmokeTest._buildDiamond`'s cut construction.
     /// Extracted here so each test can vary `salt` without re-reading the
     /// smoke-test internals.
-    function _buildAllFacetCuts()
-        internal
-        view
-        returns (IDiamondWritableInternal.FacetCut[] memory cuts)
-    {
+    function _buildAllFacetCuts() internal view returns (IDiamondWritableInternal.FacetCut[] memory cuts) {
         cuts = new IDiamondWritableInternal.FacetCut[](7);
         cuts[0] = IERC2535DiamondCutInternal.FacetCut({
             target: address(coreFacet),
@@ -161,28 +151,19 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
     /// register as factory-deployed - otherwise an attacker could publish
     /// a diamond at any address and trick the webhook into sponsoring its
     /// UserOps.
-    function test_isDeployedCluster_returnsFalseForExternallyDeployedDiamond()
-        public
-    {
+    function test_isDeployedCluster_returnsFalseForExternallyDeployedDiamond() public {
         ClusterDiamondFactory f = _freshFactory();
         IDiamondWritableInternal.FacetCut[] memory cuts = _buildAllFacetCuts();
         bytes memory initCalldata = _buildInitCalldata();
 
         // Construct a ClusterDiamond OUT-OF-BAND - no factory involvement.
-        ClusterDiamond external_ =
-            new ClusterDiamond(cuts, address(diamondInit), initCalldata);
+        ClusterDiamond external_ = new ClusterDiamond(cuts, address(diamondInit), initCalldata);
 
-        assertFalse(
-            f.isDeployedCluster(address(external_)),
-            "external diamond MUST NOT register as factory-deployed"
-        );
+        assertFalse(f.isDeployedCluster(address(external_)), "external diamond MUST NOT register as factory-deployed");
         // And it MUST NOT show up in the enumeration array either.
         address[] memory list = f.listClusters();
         for (uint256 i = 0; i < list.length; i++) {
-            assertTrue(
-                list[i] != address(external_),
-                "external diamond leaked into registry"
-            );
+            assertTrue(list[i] != address(external_), "external diamond leaked into registry");
         }
     }
 
@@ -215,10 +196,7 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         // Another deploy mustn't touch the prior bit.
         _deployClusterViaFactory(bytes32(uint256(1)));
 
-        assertTrue(
-            f.isDeployedCluster(d),
-            "bit cleared by some factory function: invariant broken"
-        );
+        assertTrue(f.isDeployedCluster(d), "bit cleared by some factory function: invariant broken");
     }
 
     /// After any sequence of `deployCluster` calls, `clusterCount()` must
@@ -234,11 +212,7 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
 
         for (uint256 i = 0; i < 5; i++) {
             _deployClusterViaFactory(bytes32(0));
-            assertEq(
-                f.clusterCount(),
-                f.listClusters().length,
-                "count must equal array length after every deploy"
-            );
+            assertEq(f.clusterCount(), f.listClusters().length, "count must equal array length after every deploy");
         }
         assertEq(f.clusterCount(), 5, "count grew to 5");
     }
@@ -366,8 +340,7 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
     function test_deployCluster_deploysWorkingDiamond() public {
         address d = _deployClusterViaFactory(bytes32(0));
 
-        IDiamondReadable.Facet[] memory facets =
-            IDiamondReadable(d).facets();
+        IDiamondReadable.Facet[] memory facets = IDiamondReadable(d).facets();
         assertEq(facets.length, 8, "8 facet entries (7 app + 1 builtin)");
 
         // Spot-check that core, admin, and view facets all show up at the
@@ -378,25 +351,13 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         for (uint256 i = 0; i < facets.length; i++) {
             if (facets[i].target == address(coreFacet)) {
                 sawCore = true;
-                assertEq(
-                    facets[i].selectors.length,
-                    _coreSelectors().length,
-                    "core selector count"
-                );
+                assertEq(facets[i].selectors.length, _coreSelectors().length, "core selector count");
             } else if (facets[i].target == address(adminFacet)) {
                 sawAdmin = true;
-                assertEq(
-                    facets[i].selectors.length,
-                    _adminSelectors().length,
-                    "admin selector count"
-                );
+                assertEq(facets[i].selectors.length, _adminSelectors().length, "admin selector count");
             } else if (facets[i].target == address(viewFacet)) {
                 sawView = true;
-                assertEq(
-                    facets[i].selectors.length,
-                    _viewSelectors().length,
-                    "view selector count"
-                );
+                assertEq(facets[i].selectors.length, _viewSelectors().length, "view selector count");
             }
         }
         assertTrue(sawCore, "core facet wired");
@@ -409,16 +370,10 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
 
         // Pre-condition: random address is not registered.
         address randomAddr = address(0xDEAD);
-        assertFalse(
-            f.isDeployedCluster(randomAddr),
-            "random addr starts false"
-        );
+        assertFalse(f.isDeployedCluster(randomAddr), "random addr starts false");
 
         address d = _deployClusterViaFactory(bytes32(0));
-        assertTrue(
-            f.isDeployedCluster(d),
-            "deployedClusters[d] flipped true"
-        );
+        assertTrue(f.isDeployedCluster(d), "deployedClusters[d] flipped true");
     }
 
     function test_deployCluster_pushesToRegisteredClusters() public {
@@ -442,39 +397,19 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         // recorded logs to find the ClusterDeployed event by signature +
         // emitter.
         vm.recordLogs();
-        f.deployCluster(
-            cuts,
-            address(diamondInit),
-            initCalldata,
-            bytes32(uint256(0xCAFE))
-        );
+        f.deployCluster(cuts, address(diamondInit), initCalldata, bytes32(uint256(0xCAFE)));
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bytes32 sig = keccak256("ClusterDeployed(address,address,bytes32)");
         bool found;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (
-                logs[i].emitter == address(f) &&
-                logs[i].topics.length == 4 &&
-                logs[i].topics[0] == sig
-            ) {
+            if (logs[i].emitter == address(f) && logs[i].topics.length == 4 && logs[i].topics[0] == sig) {
                 // topics[1] = diamond, topics[2] = deployer, topics[3] = salt
-                assertEq(
-                    address(uint160(uint256(logs[i].topics[2]))),
-                    deployer,
-                    "deployer indexed"
-                );
-                assertEq(
-                    logs[i].topics[3],
-                    bytes32(uint256(0xCAFE)),
-                    "salt indexed"
-                );
+                assertEq(address(uint160(uint256(logs[i].topics[2]))), deployer, "deployer indexed");
+                assertEq(logs[i].topics[3], bytes32(uint256(0xCAFE)), "salt indexed");
                 // diamond topic must reference a factory-tracked address.
                 address d = address(uint160(uint256(logs[i].topics[1])));
-                assertTrue(
-                    f.isDeployedCluster(d),
-                    "indexed diamond addr must be in registry"
-                );
+                assertTrue(f.isDeployedCluster(d), "indexed diamond addr must be in registry");
                 found = true;
                 break;
             }
@@ -518,23 +453,12 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
         bytes memory initCalldata = _buildInitCalldata();
         bytes32 salt = bytes32(uint256(0xBADBABE));
 
-        bytes memory bytecode = abi.encodePacked(
-            type(ClusterDiamond).creationCode,
-            abi.encode(cuts, address(diamondInit), initCalldata)
-        );
-        address predicted = address(uint160(uint256(keccak256(abi.encodePacked(
-            bytes1(0xff),
-            address(f),
-            salt,
-            keccak256(bytecode)
-        )))));
+        bytes memory bytecode =
+            abi.encodePacked(type(ClusterDiamond).creationCode, abi.encode(cuts, address(diamondInit), initCalldata));
+        address predicted =
+            address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(f), salt, keccak256(bytecode))))));
 
-        address actual = f.deployCluster(
-            cuts,
-            address(diamondInit),
-            initCalldata,
-            salt
-        );
+        address actual = f.deployCluster(cuts, address(diamondInit), initCalldata, salt);
         assertEq(actual, predicted, "CREATE2 lands at predicted address");
     }
 
@@ -577,25 +501,9 @@ contract ClusterDiamondFactoryTest is DiamondSmokeTest {
     function test_deployedDiamond_isFunctional() public {
         address d = _deployClusterViaFactory(bytes32(0));
 
-        assertEq(
-            IAdmin(d).clusterVersion(),
-            4,
-            "DiamondInit set clusterVersion = 4"
-        );
-        assertEq(
-            IERC173(d).owner(),
-            deployer,
-            "DiamondInit overwrote OwnableStorage.owner = args.owner"
-        );
-        assertEq(
-            IClusterView(d).clusterId(),
-            "test-cluster-via-factory",
-            "DiamondInit set clusterId"
-        );
-        assertEq(
-            IClusterView(d).factory(),
-            address(factory),
-            "DiamondInit set factory pointer"
-        );
+        assertEq(IAdmin(d).clusterVersion(), 4, "DiamondInit set clusterVersion = 4");
+        assertEq(IERC173(d).owner(), deployer, "DiamondInit overwrote OwnableStorage.owner = args.owner");
+        assertEq(IClusterView(d).clusterId(), "test-cluster-via-factory", "DiamondInit set clusterId");
+        assertEq(IClusterView(d).factory(), address(factory), "DiamondInit set factory pointer");
     }
 }

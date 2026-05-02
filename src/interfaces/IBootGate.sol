@@ -9,5 +9,7 @@ interface IBootGate {
     /// allowedComposeHashes, allowAnyDevice || allowedDeviceIds.
     /// Returns (false, reason) on any failure, (true, "") on pass.
     function clusterBootPolicy(address passthrough, bytes32 composeHash, bytes32 deviceId)
-        external view returns (bool ok, string memory reason);
+        external
+        view
+        returns (bool ok, string memory reason);
 }

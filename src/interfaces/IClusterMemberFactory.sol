@@ -8,11 +8,7 @@ pragma solidity ^0.8.24;
 interface IClusterMemberFactory {
     event MemberImplUpdated(bytes32 indexed attestationId, address indexed oldImpl, address indexed newImpl);
     event MemberDeployed(
-        address indexed cluster,
-        bytes32 indexed salt,
-        bytes32 indexed attestationId,
-        address proxy,
-        address impl
+        address indexed cluster, bytes32 indexed salt, bytes32 indexed attestationId, address proxy, address impl
     );
     event AdminTransferStarted(address indexed previousAdmin, address indexed newAdmin);
     event AdminTransferred(address indexed previousAdmin, address indexed newAdmin);
@@ -42,16 +38,11 @@ interface IClusterMemberFactory {
     function acceptAdmin() external;
 
     // Deploy
-    function deployMember(address cluster, bytes32 salt, bytes32 attestationId)
-        external returns (address proxy);
-    function predict(address cluster, bytes32 salt, bytes32 attestationId)
-        external view returns (address);
-    function deployMemberWithExpectedImpl(
-        address cluster,
-        bytes32 salt,
-        bytes32 attestationId,
-        address expectedImpl
-    ) external returns (address proxy);
+    function deployMember(address cluster, bytes32 salt, bytes32 attestationId) external returns (address proxy);
+    function predict(address cluster, bytes32 salt, bytes32 attestationId) external view returns (address);
+    function deployMemberWithExpectedImpl(address cluster, bytes32 salt, bytes32 attestationId, address expectedImpl)
+        external
+        returns (address proxy);
 }
 
 /// @notice Initializer interface the Member proxy's `initialize` must satisfy.
